@@ -18,11 +18,11 @@ sub build($self) {
 		my $private_sleep_time = (1 / 8); #private endpoint burst max
 
 		if ($self->signer()) { 
-			sleep($private_sleep_time);
+#			sleep($private_sleep_time);
 			$self->signer->sign($_[1]) 
 		}
 		else {
-			sleep($public_sleep_time)
+#			sleep($public_sleep_time)
 		}
 
 	});
