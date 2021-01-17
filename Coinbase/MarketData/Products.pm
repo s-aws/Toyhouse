@@ -86,7 +86,7 @@ sub update_products ($self) {
 
 sub update_order_book ($self, $product_id=undef, $arg='level=1') { #update_product_order_book('BTC-USD', $arg); # $arg = 'level=1', 'level=2', 'level=3'
 	die 'product_id required' unless $product_id; $product_id = uc $product_id;
-	$self->order_book($product_id, {}) unless $self->order_book($product_id);
+#	$self->order_book($product_id) unless $self->order_book($product_id);
 
 	$self->req->api_path( Toyhouse::Model::Coinbase::API->products($product_id, 'book') );
 	$self->req->method( $GET );
@@ -97,7 +97,7 @@ sub update_order_book ($self, $product_id=undef, $arg='level=1') { #update_produ
 
 	my $json = decode_json($content->asset->{content}) || die $content->asset->{content}; 
 	
-	$self->order_book( $product_id )->{ $json->{sequence} } = Toyhouse::Model::Coinbase::Product::Book->new( asks => $json->{asks}, bids => $json->{bids} );
+	$self->order_book( $product_id, Toyhouse::Model::Coinbase::Product::Book->new( asks => $json->{asks}, bids => $json->{bids} ) );
 	return $self;
 }
 

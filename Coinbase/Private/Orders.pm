@@ -6,7 +6,7 @@ use Toyhouse::Model::Order;
 use Mojo::Base qw/-strict -signatures/;
 use JSON qw/decode_json/;
 use Class::Struct ('Toyhouse::Coinbase::Private::Orders' => {
-	req => 'Toyhouse::Coinbase::Request'
+	req => 'Toyhouse::Coinbase::Request',
 });
 
 Readonly my $GET => 'GET';
@@ -23,6 +23,7 @@ sub place_new_order ($self, $order_ref) {
 	$self->req->api_path( Toyhouse::Model::Coinbase::API->orders() );
 	$self->req->body( $order_ref );
 	$self->req->method( $POST );
+
 	my $content = $self->req->send();
 
 	die $content->asset->{content} unless $content->headers->header('content-length') >= 2; # []
@@ -59,11 +60,12 @@ sub update_order ($self, $order_id) {
 	die 'order_id is required' unless $order_id;	
 	$self->req->api_path( Toyhouse::Model::Coinbase::API->orders($order_id) );
 	$self->req->method( $GET );
+
 	my $content = $self->req->send();
 
 	die $content->asset->{content} unless $content->headers->header('content-length') >= 2; # []
 
-	return Toyhouse::Model::Order->new(%{ decode_json($content->asset->{content}) })->build->no_class();
+	return Toyhouse::Model::Order->new(%{ decode_json($content->asset->{content}) })->build;
 	$self
 }
 
