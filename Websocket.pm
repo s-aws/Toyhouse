@@ -113,10 +113,8 @@ sub init($self) {
 			$self->console_prod_loc( $product_id => ($i+1) );
 			$i++;
 		}
-		#$self->console_counter(0); # not used
 	}
 
-#	Mojo::IOLoop->singleton->reactor->timer(2 => sub {  });
 	$self;
 }
 
@@ -314,8 +312,6 @@ sub start($self) {
 				elsif ($order->type() eq 'open') {
 					$self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() );
 					$self->order_details( $order->order_id() )->type( $order->type() );
-#					$self->reorders( $order->product_id() )->{ $order->order_id() }->open( rand($self->reorders( $order->product_id() )->{ $order->order_id() }->open()) +$self->reorders( $order->product_id() )->{ $order->order_id() }->open() );
-
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
 					$self->reorders( $order->order_id() )->start_timer(open => sub{ $self->cancel_order_id($order->order_id()) });
 				}
@@ -367,11 +363,9 @@ sub start($self) {
 					$self->dbh->record( $order->to_json() ) if $self->dbh();
 				}
  			}
- 			else {#if ( !$self->signer->secret() ) { # If no secret exists, this is used for 'general' 
+ 			else {
  				if ($order->type() eq 'match') {
  					$self->track_order($order);
-#					Mojo::IOLoop->singleton->reactor->timer(2 => sub { undef $self->{update_ticks_display} });
-					# $self->display_historical_ticks_average_versus_order($order);
  					if ($self->dbh) {
 						#only record minimal data;
 						# we set the product_id so it will be appended to the table_name we are writing to. 						
