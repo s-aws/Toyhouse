@@ -1,7 +1,7 @@
 package Toyhouse::Websocket;
 # WebSocket Service
 #
-# Connect to a websocket and then record matches to db.
+# Connect to a websocket and perform main logic for order handling
 use Data::Dumper;
 use Time::HiRes qw/time/;
 use Toyhouse::Model::Websocket::Subscription;
