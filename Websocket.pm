@@ -13,6 +13,7 @@ use Toyhouse::Coinbase::Request;
 use Toyhouse::Coinbase::Private::Accounts;
 use Toyhouse::Coinbase::MarketData::Products;
 use Toyhouse::Coinbase::Private::Orders;
+use Toyhouse::Model::Order::Metadata::Timer;
 use Toyhouse::UUID;
 use JSON qw/encode_json/;
 use Mojo::Base qw/-strict -signatures/;
@@ -60,9 +61,11 @@ use Class::Struct( 'Toyhouse::Websocket' => {
 	order_details 	=> '%', # order_id => %order
 	reorders 		=> '%', # BTC-USD => order_id
 
-	last_match	 	=> '%', # 'BTC-USD' => price
+	last_match	 	=> '%', # 'BTC-USD' => price # using track_order data for this
 
 	base_re_pct		=> '%', #base 'filled', 'canceled' reorder percentage
+
+	order_delay_sec	=> '$', #order delay in seconds
 
 });
 
@@ -85,8 +88,9 @@ sub init($self) {
 	$self->connect_count(0) unless $self->connect_count();
 	$self->json_count(0);
 
-	$self->base_re_pct( filled => 0.01 );
-	$self->base_re_pct( canceled => 0.001 );
+	$self->base_re_pct( filled => 0.0075 );
+	$self->base_re_pct( canceled => 0.0005 );
+	$self->order_delay_sec(60);
 
 	$self->products(	Toyhouse::Coinbase::MarketData::Products->new( 	req => $self->request() ));
 	$self->orders(		Toyhouse::Coinbase::Private::Orders->new( 		req => $self->request() ));
@@ -236,6 +240,7 @@ sub track_order($self, $order, $type=60) { # type must be an int (size of the ti
 	$p->[$most_recent]->[$volume] += $order->size();
 }
 
+
 sub get_avg_ticks($self, $order, $scope=1) { #base scope = 60
 	my $ticks_in_scope = 60; #each bucket is 60 ticks 
 	$scope *= $ticks_in_scope;
@@ -267,6 +272,15 @@ sub update_order($self, $order_id) {
 	$self->orders->update_order( $order_id );
 }
 
+sub random_order_delay($int=60) {
+	rand($int)
+}
+
+sub cancel_order_id($self, $order_id) {
+	$self->log('canceling order id', $order_id);
+	$self->orders->cancel_order( $order_id );
+}
+
 sub start($self) {
 	$UA->websocket_p($URL)->then(sub ($tx) {
 		$self->profile_name( 'I am' ) unless $self->profile_name();
@@ -288,54 +302,66 @@ sub start($self) {
 				$self->display_accounts_in_console();
 
 				if ($order->type() eq 'received') {
+					$order->remaining_size( $order->size() ); #preparing for the open (or done)
 					$self->order_details( $order->order_id() => $order );
-					$self->order_details( $order->order_id() )->remaining_size( $order->size() );
-					$self->reorders( $order->product_id() )->{ $order->order_id() } = [];
-					push @{ $self->reorders( $order->product_id() )->{ $order->order_id() } }, $self->reorders( $order->product_id() )->{ $order->client_oid() } if $self->reorders( $order->product_id() )->{ $order->client_oid() };
+					$self->reorders( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
+					$self->log("client_oid:", $order->client_oid(), "= order_id:", $order->order_id()); # for visibility
+
+					if ($self->reorders( $order->client_oid() )) {
+						$self->reorders( $order->client_oid() )->remove_all_timers(); delete $self->reorders()->{ $order->client_oid() };
+					}
 				}
 				elsif ($order->type() eq 'open') {
 					$self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() );
-					$self->order_details( $order->order_id() )->{type} = $order->type();
-					#order tests
-					#push @{ $self->reorders( $order->product_id() )->{ $order->order_id() } }, Mojo::IOLoop->singleton->reactor->recurring(2 => sub { use Data::Dumper; print STDERR Dumper $order; print STDERR $self->last_match( $order->product_id ) if $self->last_match( $order->product_id ) } )
+					$self->order_details( $order->order_id() )->type( $order->type() );
+#					$self->reorders( $order->product_id() )->{ $order->order_id() }->open( rand($self->reorders( $order->product_id() )->{ $order->order_id() }->open()) +$self->reorders( $order->product_id() )->{ $order->order_id() }->open() );
+
+					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
+					$self->reorders( $order->order_id() )->start_timer(open => sub{ $self->cancel_order_id($order->order_id()) });
 				}
 				elsif ($order->type() eq 'done') {
-
 					#remove all evnts for this order_id
-					if ($self->reorders( $order->product_id() )->{ $order->order_id() }) { Mojo::IOLoop->remove( $_ ) foreach @{ $self->reorders( $order->product_id() )->{ $order->order_id() } } }
+					if ($self->reorders( $order->order_id() )) { $self->reorders( $order->order_id() )->remove_all_timers(); delete $self->reorders()->{ $order->order_id() } }
 
-					return $self->display($self->profile_name(), 'proper size not listed for', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
+					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
 
-					my $new_order = Toyhouse::Model::Order->new();	
-					my ($new_side, $new_price, $order_delay) = ('buy', 0, 60);
+					my $new_order = Toyhouse::Model::Order->new(); # prepare a new order
+					my ($new_side, $new_price, $new_size, $order_delay) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
 
+					my $price_move_amount = 0;
  					if ($order->reason() eq 'filled') {
- 						$new_price = $order->price() * $self->base_re_pct( 'filled' );
+ 						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
  						$new_side = 'sell' if $order->side eq 'buy';
- 						$order_delay *= 60 * 3; 
+ 						$order_delay *= $self->order_delay_sec();
+ 						$new_size = $self->order_details( $order->order_id() )->size(); #because we're filled, we must use size from the received message
 					}
 					else {
-						$new_price = $order->price() * $self->base_re_pct( 'canceled' );
+						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'canceled' )) +$self->base_re_pct( 'canceled' ));
 						$new_side = 'sell' if $order->side eq 'sell';
 					}
 
-					$new_price = ($new_side eq 'sell') ? $self->clean_quote($order->product_id(), ($order->price() + $new_price)) : $self->clean_quote($order->product_id(), ($order->price() - $new_price));
+					$new_price = ($new_side eq 'sell') ? $self->clean_quote($order->product_id(), ($order->price() +$price_move_amount)) : $self->clean_quote($order->product_id(), ($order->price() -$price_move_amount));
 
 					$new_order->price( $new_price );
 					$new_order->side( $new_side );
 					$new_order->product_id($order->product_id());
-					$new_order->size( ($order->remaining_size() || ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) );
-					$new_order->client_oid( $self->uuid->generate() );
+					$new_order->size( $new_size );
+					$new_order->client_oid( $self->uuid->generate( $order->order_id() ) );
 
-					$self->log($self->profile_name(), $order_delay, 'sec order delay for', $new_order->client_oid());
 
-					$self->reorders( $order->product_id() )->{ $new_order->client_oid() } = Mojo::IOLoop->singleton->reactor->timer($order_delay => sub { $self->log('executing order', $new_order->client_oid()); $self->orders->place_new_order( $new_order->build()->no_class() ) });
+					$self->reorders( $new_order->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
+
+					$self->log( $self->reorders( $new_order->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $new_order->client_oid() );
+
+					$self->reorders( $new_order->client_oid() )->start_timer( filled => sub { 
+								$self->log('executing order client_oid:', $new_order->client_oid()); 
+								$self->orders->place_new_order( $new_order->build()->no_class() ) });
 					
 					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
-				elsif ( $order->type eq 'match') {
+				elsif ( $order->type eq 'match' ) {
 					if ( $self->order_details( $order->maker_order_id() ) ) { $self->order_details( $order->maker_order_id() )->remaining_size( $self->order_details( $order->maker_order_id() )->remaining_size() - $order->size() )}
 					elsif ( $self->order_details( $order->taker_order_id() ) ) { $self->order_details( $order->taker_order_id() )->remaining_size( $self->order_details( $order->taker_order_id() )->remaining_size() - $order->size() )}
 					$self->dbh->record( $order->to_json() ) if $self->dbh();

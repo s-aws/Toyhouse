@@ -14,8 +14,8 @@ sub build ($self) {
 	$self;
 }
 
-sub generate($self) {
-	return (lc $self->ug->create_from_name_str( NameSpace_DNS, $self->scope() ) || 0);
+sub generate($self, $arg='default') {
+	return (lc $self->ug->create_from_name_str( NameSpace_DNS, $self->scope(). $arg ) || 0);
 }
 
 1;
