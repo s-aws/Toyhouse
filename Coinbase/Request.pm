@@ -49,7 +49,7 @@ sub send($self) {
  		$o = $ua->$method( $full_url => @$body );
 
  		if ($o->res->content->headers->header('content-length') > 2) {
- 			if ($r || $o->res->error()) {
+ 			if ($r && $o->res->error()) {
 	 			if ($o->res->error() && ($o->res->error->{code} == 429)) { #throttled
 	 				print STDERR $o->res->content->asset->{content}. " sleeping $sleep_time second\n";
 		 			sleep $sleep_time; $sleep_time *= 2;
