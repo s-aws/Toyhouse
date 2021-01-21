@@ -192,7 +192,7 @@ sub display_historical_ticks_average_versus_order($self, $order) {
 
 sub display_order_in_console($self, $order) {
 	unless ($self->console()) {
-		$self->display( $order->time(), 
+		$self->display(
 			($order->order_id() || 
 				($self->order_details($order->maker_order_id()) ? $order->maker_order_id() : $order->taker_order_id())), 
 			$order->product_id(), 
@@ -317,6 +317,16 @@ sub start($self) {
 					$self->order_details( $order->order_id() )->type( $order->type() );
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
 					$self->reorders( $order->order_id() )->start_timer(open => sub{ $self->cancel_order_id($order->order_id()) });
+
+					# for now we set this up so that if an order is only partially filled, we don't want to 'cancel/replcae' the order if the remaining_size is smaller than base_min_size
+					$self->log( 'setting remaining_size check', $order->order_id(), 'timer for', $self->reorders( $order->order_id() )->open(), '-10 seconds' );
+					$self->reorders( $order->order_id() )->remainok( $self->reorders( $order->order_id() )->open() -10 );
+					$self->reorders( $order->order_id() )->start_timer(remainok => sub{ 
+						if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size}) {
+							$self->log( 'remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size(), 'canceling all timers');
+							$self->reorders( $order->order_id() )->remove_all_timers();
+						}
+					});
 				}
 				elsif ($order->type() eq 'done') {
 					#remove all evnts for this order_id
