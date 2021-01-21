@@ -282,6 +282,11 @@ sub cancel_order_id($self, $order_id) {
 	$self->orders->cancel_order( $order_id );
 }
 
+sub remove_all_timers($self, $order_id) {
+	$self->reorders( $order_id )->remove_all_timers(); 
+	delete $self->reorders()->{ $order_id };
+}
+
 sub start($self) {
 	$UA->websocket_p($URL)->then(sub ($tx) {
 		$self->profile_name( 'I am' ) unless $self->profile_name();
@@ -306,10 +311,7 @@ sub start($self) {
 					$self->order_details( $order->order_id() => $order );
 					$self->reorders( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
 					$self->log("client_oid:", ($order->client_oid() || 'no-client_oid-found'), "= order_id:", $order->order_id()); # for visibility
-
-					if ($self->reorders( $order->client_oid() )) {
-						$self->reorders( $order->client_oid() )->remove_all_timers(); delete $self->reorders()->{ $order->client_oid() };
-					}
+					$self->remove_all_timers( $order->client_oid() ) if $self->reorders( $order->client_oid() );
 				}
 				elsif ($order->type() eq 'open') { $self->order_details( $order->order_id() )->type( $order->type() );
 					unless ($order->remaining_size() == $self->order_details( $order->order_id() )->remaining_size()) { $self->log( $order->order_id(), 'remaining_size did not match, correcting'); $self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() ) } 
@@ -321,7 +323,7 @@ sub start($self) {
 							my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
 							if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
 								$self->log( 'failing to cancel, remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size() );
-								$self->reorders( $order->order_id() )->remove_all_timers();
+								$self->remove_all_timers( $order->order_id() );
 							}
 							elsif ($distance && ($distance < $self->too_far_percent())) {
 								$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
@@ -334,7 +336,7 @@ sub start($self) {
 					}
 				}
 				elsif ($order->type() eq 'done') {
-					if ($self->reorders( $order->order_id() )) { $self->reorders( $order->order_id() )->remove_all_timers(); delete $self->reorders()->{ $order->order_id() } } #remove all evnts for this order_id
+					$self->remove_all_timers( $order->order_id() ) if $self->reorders( $order->order_id() ); #remove all evnts for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
@@ -374,17 +376,10 @@ sub start($self) {
 					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
-				elsif ( $order->type eq 'match' ) {
-					if ( $self->order_details( $order->taker_order_id() ) ) {
-						$self->log( 'taker for order', $order->taker_order_id() ); # we just want to track when this happens (for now)
-						$self->order_details( $order->taker_order_id() )->remaining_size( $self->order_details( $order->taker_order_id() )->remaining_size() -$order->size() );
-					}
-					elsif ( $self->order_details( $order->maker_order_id() ) ) { 
-						$self->order_details( $order->maker_order_id() )->remaining_size( $self->order_details( $order->maker_order_id() )->remaining_size() -$order->size() );
-						$self->reorders( $order->maker_order_id() )->remove_all_timers(); delete $self->reorders()->{ $order->maker_order_id() }; #cancel event timers since we're currently not handling partially opened orders
-					}
-
-					$self->dbh->record( $order->to_json() ) if $self->dbh();
+				elsif ( $order->type eq 'match' ) { my $order_id = ($order->taker_order_id() || $order->maker_order_id());
+					$self->order_details( $order_id )->remaining_size( $self->order_details( $order_id )->remaining_size() -$order->size() );
+					( $self->order_details( $order_id )->type() eq 'open' ) ? $self->reorders( $order_id ) ? $self->remove_all_timers( $order_id ) : 0 : $self->log( $order_id, 'is a taker match' ); #taker matches are limit tyhpe: received
+					$self->dbh->record( $order->to_json() ) if $self->dbh(); 
 				}
  			}
  			elsif ($order->type() eq 'match') {
