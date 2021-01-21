@@ -3,6 +3,7 @@ use Mojo::Base qw/-strict -signatures/;
 use Mojo::IOLoop;
 use Class::Struct ('Toyhouse::Model::Order::Metadata::Timer' => {
 	canceled=> '$',
+	remainok=> '$', # this is to check if remaining_size is > minimum allowed
 	filled	=> '$',
 	match	=> '$',
 	open	=> '$',
@@ -10,6 +11,7 @@ use Class::Struct ('Toyhouse::Model::Order::Metadata::Timer' => {
 	done 	=> '$',
 
 	canceled_id	=> '$',
+	remainok_id	=> '$',	
 	filled_id	=> '$',
 	match_id	=> '$',
 	open_id		=> '$',
@@ -31,12 +33,12 @@ sub build($self) {
 	$self;
 }
 
+sub remove($self, $id) {
+	Mojo::IOLoop->remove( $self->$id() ) if $self->$id();
+}
+
 sub remove_all_timers($self) {
-	Mojo::IOLoop->remove( $self->canceled_id()	)	if $self->canceled_id();
-	Mojo::IOLoop->remove( $self->filled_id()	)	if $self->filled_id();
-	Mojo::IOLoop->remove( $self->match_id()		)	if $self->match_id();	
-	Mojo::IOLoop->remove( $self->open_id()		)	if $self->open_id();
-	Mojo::IOLoop->remove( $self->received_id()	)	if $self->received_id();
+	$self->remove( $_ ) foreach qw/canceled_id filled_id match_id open_id received_id remainok_id done_id/;
 	$self;
 }
 
@@ -44,7 +46,7 @@ sub start_timer($self, $type, $coderef) {
 	die "unable to call type $type" unless $self->$type(); my $typeid = $type . "_id";
 
 	$self->$typeid(
-		Mojo::IOLoop->singleton->reactor->timer( $self->$type() => $coderef )) if $type =~ /open|done|filled/;
+		Mojo::IOLoop->singleton->reactor->timer( $self->$type() => $coderef )) if $type =~ /open|done|filled|remainok/;
 
 	$self
 }
