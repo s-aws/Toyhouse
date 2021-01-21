@@ -67,6 +67,8 @@ use Class::Struct( 'Toyhouse::Websocket' => {
 
 	order_delay_sec	=> '$', #order delay in seconds
 
+	too_far_percent => '$', # we don't want to move orders away that are this percentage away
+
 });
 
 $ENV{MOJO_CLIENT_DEBUG} =1; $| =1;
@@ -91,6 +93,7 @@ sub init($self) {
 	$self->base_re_pct( filled => 0.0075 );
 	$self->base_re_pct( canceled => 0.0005 );
 	$self->order_delay_sec(60);
+	$self->too_far_percent(0.05);
 
 	$self->products(	Toyhouse::Coinbase::MarketData::Products->new( 	req => $self->request() ));
 	$self->orders(		Toyhouse::Coinbase::Private::Orders->new( 		req => $self->request() ));
@@ -106,13 +109,14 @@ sub init($self) {
 			$self->reorders( $product_id => {} );
 		}		
 	}
-	else { # if we're subscribed to full, we shouldn't be authenticate to the websocket. Processing user_id are preferred on their own stream since we are actively processing each full message
-		my $i = 0;
-		foreach my $product_id (@{ $self->product_ids() }) {
-			$self->order_tracker( $product_id => [[0]] );
-			$self->console_prod_loc( $product_id => ($i+1) );
-			$i++;
-		}
+	else {} # if we're subscribed to full, we shouldn't be authenticate to the websocket. Processing user_id are preferred on their own stream since we are actively processing each full message
+	
+	# allowing order tracking on user_id feed for now
+	my $i = 0;
+	foreach my $product_id (@{ $self->product_ids() }) {
+		$self->order_tracker( $product_id => [[0]] );
+		$self->console_prod_loc( $product_id => ($i+1) );
+		$i++;
 	}
 
 	$self;
@@ -238,7 +242,6 @@ sub track_order($self, $order, $type=60) { # type must be an int (size of the ti
 	$p->[$most_recent]->[$volume] += $order->size();
 }
 
-
 sub get_avg_ticks($self, $order, $scope=1) { #base scope = 60
 	my $ticks_in_scope = 60; #each bucket is 60 ticks 
 	$scope *= $ticks_in_scope;
@@ -303,7 +306,7 @@ sub start($self) {
 					$order->remaining_size( $order->size() ); #preparing for the open (or done)
 					$self->order_details( $order->order_id() => $order );
 					$self->reorders( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
-					$self->log("client_oid:", $order->client_oid(), "= order_id:", $order->order_id()); # for visibility
+					$self->log("client_oid:", ($order->client_oid() || 'no-client_oid-found'), "= order_id:", $order->order_id()); # for visibility
 
 					if ($self->reorders( $order->client_oid() )) {
 						$self->reorders( $order->client_oid() )->remove_all_timers(); delete $self->reorders()->{ $order->client_oid() };
@@ -316,21 +319,24 @@ sub start($self) {
 					}
 					$self->order_details( $order->order_id() )->type( $order->type() );
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
-					$self->reorders( $order->order_id() )->start_timer(open => sub{ $self->cancel_order_id($order->order_id()) });
-
-					# for now we set this up so that if an order is only partially filled, we don't want to 'cancel/replcae' the order if the remaining_size is smaller than base_min_size
-					$self->log( 'setting remaining_size check', $order->order_id(), 'timer for', $self->reorders( $order->order_id() )->open(), '-10 seconds' );
-					$self->reorders( $order->order_id() )->remainok( $self->reorders( $order->order_id() )->open() -10 );
-					$self->reorders( $order->order_id() )->start_timer(remainok => sub{ 
-						if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size}) {
-							$self->log( 'remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size(), 'canceling all timers');
+					$self->reorders( $order->order_id() )->start_timer(open => sub {
+						my $most_recent_match_price = $self->last_match( $order->product_id() );
+						my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
+						if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
+							$self->log( 'failing to cancel, remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size() );
 							$self->reorders( $order->order_id() )->remove_all_timers();
 						}
-					});
+						elsif ($distance && ($distance < $self->too_far_percent())) {
+							$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
+							$self->cancel_order_id( $order->order_id() )
+						}
+						else { #too far away, do nothing (for now)
+							$self->log( 'order_id', $order->order_id(), 'is too far away:', ($distance || 'undefined'), 'doing nothing' );
+						}
+ 					});
 				}
 				elsif ($order->type() eq 'done') {
-					#remove all evnts for this order_id
-					if ($self->reorders( $order->order_id() )) { $self->reorders( $order->order_id() )->remove_all_timers(); delete $self->reorders()->{ $order->order_id() } }
+					if ($self->reorders( $order->order_id() )) { $self->reorders( $order->order_id() )->remove_all_timers(); delete $self->reorders()->{ $order->order_id() } } #remove all evnts for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
@@ -382,23 +388,22 @@ sub start($self) {
 					$self->dbh->record( $order->to_json() ) if $self->dbh();
 				}
  			}
- 			else {
- 				if ($order->type() eq 'match') {
- 					$self->track_order($order);
- 					if ($self->dbh) {
-						#only record minimal data;
-						# we set the product_id so it will be appended to the table_name we are writing to. 						
-						$self->dbh->product_id( $order->product_id() );
-	 					# write the data to the $table_name_$product_id
- 						$self->dbh->record( Toyhouse::Model::Order->new(
-								price		=> $order->price(),
-								product_id	=> $order->product_id(),
-								side		=> $order->side(),
-								size		=> $order->size(),
-								time		=> $order->time())->build->to_json());
-	 				}
- 				}
- 			}
+ 			elsif ($order->type() eq 'match') {
+				$self->track_order($order);
+				if ($self->dbh) {
+					#only record minimal data;
+					# we set the product_id so it will be appended to the table_name we are writing to. 						
+					$self->dbh->product_id( $order->product_id() );
+ 					# write the data to the $table_name_$product_id
+					$self->dbh->record( Toyhouse::Model::Order->new(
+						price		=> $order->price(),
+						product_id	=> $order->product_id(),
+						side		=> $order->side(),
+						size		=> $order->size(),
+						time		=> $order->time())->build->to_json());
+				}
+			}
+
 		});
 
 		$tx->on(finish => sub { $self->display( ($self->console() ? "\033[K\033[75;0f" : ""), "disconnected" ); $self->start() }); #sub promise { this is a promise  that never ends, yes it goes on and on my friend.. some people started running it not knowing what it was, and they continue running it forever just because... promise()

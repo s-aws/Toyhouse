@@ -26,10 +26,12 @@ our $OPEN_ORDER_MULTIPLIER = 60; # open order with timer to cancel
 
 sub build($self) {
 	$self->canceled($DEFAULT_SECONDS) unless $self->canceled();
+	$self->remainok($DEFAULT_SECONDS) unless $self->remainok();	
 	$self->filled($DEFAULT_SECONDS*$FILLED_ORDER_MULTIPLIER) unless $self->filled();
 	$self->match($DEFAULT_SECONDS) 	unless $self->match();
 	$self->open($DEFAULT_SECONDS*$OPEN_ORDER_MULTIPLIER) 	unless $self->open();
 	$self->received($DEFAULT_SECONDS) unless $self->received();
+	$self->done($DEFAULT_SECONDS) unless $self->done();	
 	$self;
 }
 
@@ -46,7 +48,7 @@ sub start_timer($self, $type, $coderef) {
 	die "unable to call type $type" unless $self->$type(); my $typeid = $type . "_id";
 
 	$self->$typeid(
-		Mojo::IOLoop->singleton->reactor->timer( $self->$type() => $coderef )) if $type =~ /open|done|filled|remainok/;
+		Mojo::IOLoop->singleton->reactor->timer( $self->$type() => $coderef )) if $type =~ /canceled|remainok|filled|match|open|received|done/;
 
 	$self
 }
