@@ -310,7 +310,10 @@ sub start($self) {
 					}
 				}
 				elsif ($order->type() eq 'open') {
-					$self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() );
+					if ($order->remaining_size() != $self->order_details( $order->order_id() )->remaining_size()) {
+						$self->log( $order->order_id(), 'remaining_size did not match, correcting');
+						$self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() );
+					}
 					$self->order_details( $order->order_id() )->type( $order->type() );
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
 					$self->reorders( $order->order_id() )->start_timer(open => sub{ $self->cancel_order_id($order->order_id()) });
@@ -358,8 +361,14 @@ sub start($self) {
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
 				elsif ( $order->type eq 'match' ) {
-					if ( $self->order_details( $order->maker_order_id() ) ) { $self->order_details( $order->maker_order_id() )->remaining_size( $self->order_details( $order->maker_order_id() )->remaining_size() - $order->size() )}
-					elsif ( $self->order_details( $order->taker_order_id() ) ) { $self->order_details( $order->taker_order_id() )->remaining_size( $self->order_details( $order->taker_order_id() )->remaining_size() - $order->size() )}
+					if ( $self->order_details( $order->taker_order_id() ) ) {
+						$self->log( 'taker for order', $order->taker_order_id() );
+						$self->order_details( $order->taker_order_id() )->remaining_size( $self->order_details( $order->taker_order_id() )->remaining_size() -$order->size() );
+					}
+					elsif ( $self->order_details( $order->maker_order_id() ) ) {
+						$self->order_details( $order->maker_order_id() )->remaining_size( $self->order_details( $order->maker_order_id() )->remaining_size() -$order->size() );
+					}
+
 					$self->dbh->record( $order->to_json() ) if $self->dbh();
 				}
  			}
