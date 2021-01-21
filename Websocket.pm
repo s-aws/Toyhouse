@@ -314,7 +314,7 @@ sub start($self) {
 					$self->remove_all_timers( $order->client_oid() ) if $self->reorders( $order->client_oid() );
 				}
 				elsif ($order->type() eq 'open') { $self->order_details( $order->order_id() )->type( $order->type() );
-					unless ($order->remaining_size() == $self->order_details( $order->order_id() )->remaining_size()) { $self->log( $order->order_id(), 'remaining_size did not match, correcting'); $self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() ) } 
+					unless ($order->remaining_size() == $self->order_details( $order->order_id() )->remaining_size()) { $self->log( $order->order_id(), 'remaining_size did not match, correcting'); $self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() )  } 
 					# Only set event timers if size() eq remaining_size() (for now)
 					if ($self->order_details( $order->order_id() )->size() == $self->order_details( $order->order_id() )->remaining_size()) { #it's possible to have an open without a receive (if we missed the message) but very unlikley. still need to handle that later
 						$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
@@ -376,9 +376,8 @@ sub start($self) {
 					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
-				elsif ( $order->type eq 'match' ) { my $order_id = ($order->taker_order_id() || $order->maker_order_id());
+				elsif ( $order->type eq 'match' ) { my $order_id = $self->order_details( $order->taker_order_id() ) ? do { $self->log( $order->taker_order_id(), 'is a taker match' ); $order->taker_order_id() } : do { $self->remove_all_timers( $order->maker_order_id() ) if $self->reorders( $order->maker_order_id() ); $order->maker_order_id() };
 					$self->order_details( $order_id )->remaining_size( $self->order_details( $order_id )->remaining_size() -$order->size() );
-					( $self->order_details( $order_id )->type() eq 'open' ) ? $self->reorders( $order_id ) ? $self->remove_all_timers( $order_id ) : 0 : $self->log( $order_id, 'is a taker match' ); #taker matches are limit tyhpe: received
 					$self->dbh->record( $order->to_json() ) if $self->dbh(); 
 				}
  			}
