@@ -399,7 +399,8 @@ sub start($self) {
 					}
 					elsif ($self->order_details( $order->maker_order_id() )) {
 						$self->remove_all_timers( $order->maker_order_id() ) if $self->reorder_timer( $order->maker_order_id() ); 
-						$order_id = $order->maker_order_id() 
+						$order_id = $order->maker_order_id();
+						$self->log( 'maker match occurred, removing event timers for', $order_id );						
 					}
 					else {
 						return # must be a market order or we haven't gotten a receive message
