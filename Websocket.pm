@@ -376,7 +376,18 @@ sub start($self) {
 					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
-				elsif ( $order->type eq 'match' ) { my $order_id = $self->order_details( $order->taker_order_id() ) ? do { $self->log( $order->taker_order_id(), 'is a taker match' ); $order->taker_order_id() } : do { $self->remove_all_timers( $order->maker_order_id() ) if $self->reorders( $order->maker_order_id() ); $order->maker_order_id() };
+				elsif ( $order->type eq 'match' ) { my $order_id;
+					if ($self->order_details( $order->taker_order_id() )) {
+						$self->log( $order->taker_order_id(), 'is a taker match' ); 
+						$order_id = $order->taker_order_id() 
+					}
+					elsif ($self->order_details( $order->maker_order_id() )) {
+						$self->remove_all_timers( $order->maker_order_id() ) if $self->reorders( $order->maker_order_id() ); 
+						$order_id = $order->maker_order_id() 
+					}
+					else {
+						return # must be a market order
+					}
 					$self->order_details( $order_id )->remaining_size( $self->order_details( $order_id )->remaining_size() -$order->size() );
 					$self->dbh->record( $order->to_json() ) if $self->dbh(); 
 				}
