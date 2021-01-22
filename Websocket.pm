@@ -340,7 +340,7 @@ sub start($self) {
 						});
 					}
 				}
-				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) ) } # make sure reorder_details exists or return
+				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() ) } # make sure reorder_details exists or return
 					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all events for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
@@ -366,13 +366,17 @@ sub start($self) {
 					$self->reorder_details( $order->order_id() )->side( $new_side );
 					$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
 
+
 					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay_secs )->build() );
-
 					$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
-
 					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->start_timer( filled => sub {
 						$self->log( 'executing order client_oid:', $self->reorder_details( $order->order_id() )->client_oid() ); 
-						$self->orders->place_new_order( $self->reorder_details( $order->order_id() )->build()->no_class() ) 
+						$self->orders->place_new_order({
+							client_oid => $self->reorder_details( $order->order_id() )->client_oid(),
+							product_id => $self->reorder_details( $order->order_id() )->product_id(), 
+							side => $self->reorder_details( $order->order_id() )->side(),
+							size => $self->reorder_details( $order->order_id() )->size(),
+							price => $self->reorder_details( $order->order_id() )->price()});
 					});
 					
 					# clean up $order->order_id()
