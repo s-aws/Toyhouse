@@ -283,9 +283,20 @@ sub cancel_order_id($self, $order_id) {
 	$self->orders->cancel_order( $order_id );
 }
 
-sub remove_all_timers($self, $order_id) {
-	$self->reorder_timer( $order_id )->remove_all_timers(); 
-	delete $self->reorder_timer()->{ $order_id };
+sub remove_all_timers($self, $order_id = undef) { return unless $order_id;
+	do {
+		$self->reorder_timer( $order_id )->remove_all_timers(); 
+		delete $self->reorder_timer()->{ $order_id }
+	} if $self->reorder_timer( $order_id );
+}
+
+sub remove_reorder_details($self, $order_id = undef) { return unless $order_id;
+	delete $self->reorder_details()->{ $order_id } if $self->reorder_details( $order_id );
+}
+
+sub cleanup($self, $order_id = undef) { return unless $order_id;
+	$self->remove_all_timers( $order_id );
+	$self->remove_reorder_details( $order_id );
 }
 
 sub start($self) {
@@ -308,37 +319,34 @@ sub start($self) {
 				$self->display_order_in_console( $order );
 				$self->display_accounts_in_console();
 
-				if ($order->type() eq 'received') {	$order->remaining_size( $order->size() ); #preparing for the open (or done)
+				if ($order->type() eq 'received') { return unless $order->client_oid(); # currently not handling orders that don't have a client_oid
 					$self->order_details( $order->order_id() => $order );
+					$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->size(), side => $order->side() )->build() );
 					$self->reorder_timer( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
 					$self->log("client_oid:", ($order->client_oid() || 'no-client_oid-found'), "= order_id:", $order->order_id()); # for visibility
-					$self->remove_all_timers( $order->client_oid() ) if $self->reorder_timer( $order->client_oid() );
+					$self->remove_all_timers( $order->client_oid() );
 				}
 				elsif ($order->type() eq 'open') { $self->order_details( $order->order_id() )->type( $order->type() );
-					unless ($order->remaining_size() == $self->order_details( $order->order_id() )->remaining_size()) { $self->log( $order->order_id(), 'remaining_size did not match, correcting'); $self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() )  } 
-					# Only set event timers if size() eq remaining_size() (for now)
-					if ($self->order_details( $order->order_id() )->size() == $self->order_details( $order->order_id() )->remaining_size()) { #it's possible to have an open without a receive (if we missed the message) but very unlikley. still need to handle that later
-						$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
-						$self->reorder_timer( $order->order_id() )->start_timer(open => sub {
-							my $most_recent_match_price = $self->last_match( $order->product_id() );
-							my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
-							# needs to be rewritten to be more abstract
-							if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
-								$self->log( 'failing to cancel, remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size() );
-								$self->remove_all_timers( $order->order_id() );
-							}
-							elsif ($distance && ($distance < $self->too_far_percent())) {
-								$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
-								$self->cancel_order_id( $order->order_id() )
-							}
-							elsif ($distance && ($distance < ($self->too_far_percent() *2))) {
-								$self->log( 'order_id', $order->order_id(), 'should be moved forward:', $distance);
-							}
-							else {
-								$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
-							}
-						});
-					}
+					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
+					$self->reorder_timer( $order->order_id() )->start_timer(open => sub {
+						my $most_recent_match_price = $self->last_match( $order->product_id() );
+						my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
+
+						if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
+							$self->log( 'failing to cancel, remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size() );
+							$self->remove_all_timers( $order->order_id() );
+						}
+						elsif ($distance && ($distance < $self->too_far_percent())) {
+							$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
+							$self->cancel_order_id( $order->order_id() )
+						}
+						elsif ($distance && ($distance < ($self->too_far_percent() *2))) {
+							$self->log( 'order_id', $order->order_id(), 'should be moved forward:', $distance);
+						}
+						else {
+							$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
+						}
+					});
 				}
 				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() ) } # make sure reorder_details exists or return
 					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all events for this order_id
@@ -379,7 +387,6 @@ sub start($self) {
 							price => $self->reorder_details( $order->order_id() )->price()});
 					});
 					
-					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
  				}					
 				elsif ( $order->type eq 'match' ) { my $order_id;
