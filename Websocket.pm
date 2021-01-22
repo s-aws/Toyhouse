@@ -59,7 +59,7 @@ use Class::Struct( 'Toyhouse::Websocket' => {
 	asks			=> '%',
 
 	order_details 	=> '%', # order_id => %order
-	reorders 		=> '%', # BTC-USD => order_id
+	reorder_timer 		=> '%', # order_id => Toyhouse::Model::Metadata::Timer
 
 	last_match	 	=> '%', # 'BTC-USD' => price # using track_order data for this
 
@@ -106,7 +106,7 @@ sub init($self) {
 		$self->accounts->update_accounts();
 		$self->display_accounts_in_console();
 		foreach my $product_id (@{ $self->product_ids() }) {
-			$self->reorders( $product_id => {} );
+			$self->reorder_timer( $product_id => {} );
 		}		
 	}
 	else {} # if we're subscribed to full, we shouldn't be authenticate to the websocket. Processing user_id are preferred on their own stream since we are actively processing each full message
@@ -283,8 +283,8 @@ sub cancel_order_id($self, $order_id) {
 }
 
 sub remove_all_timers($self, $order_id) {
-	$self->reorders( $order_id )->remove_all_timers(); 
-	delete $self->reorders()->{ $order_id };
+	$self->reorder_timer( $order_id )->remove_all_timers(); 
+	delete $self->reorder_timer()->{ $order_id };
 }
 
 sub start($self) {
@@ -309,16 +309,16 @@ sub start($self) {
 
 				if ($order->type() eq 'received') {	$order->remaining_size( $order->size() ); #preparing for the open (or done)
 					$self->order_details( $order->order_id() => $order );
-					$self->reorders( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
+					$self->reorder_timer( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
 					$self->log("client_oid:", ($order->client_oid() || 'no-client_oid-found'), "= order_id:", $order->order_id()); # for visibility
-					$self->remove_all_timers( $order->client_oid() ) if $self->reorders( $order->client_oid() );
+					$self->remove_all_timers( $order->client_oid() ) if $self->reorder_timer( $order->client_oid() );
 				}
 				elsif ($order->type() eq 'open') { $self->order_details( $order->order_id() )->type( $order->type() );
 					unless ($order->remaining_size() == $self->order_details( $order->order_id() )->remaining_size()) { $self->log( $order->order_id(), 'remaining_size did not match, correcting'); $self->order_details( $order->order_id() )->remaining_size( $order->remaining_size() )  } 
 					# Only set event timers if size() eq remaining_size() (for now)
 					if ($self->order_details( $order->order_id() )->size() == $self->order_details( $order->order_id() )->remaining_size()) { #it's possible to have an open without a receive (if we missed the message) but very unlikley. still need to handle that later
-						$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorders( $order->order_id() )->open(), 'seconds' );
-						$self->reorders( $order->order_id() )->start_timer(open => sub {
+						$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
+						$self->reorder_timer( $order->order_id() )->start_timer(open => sub {
 							my $most_recent_match_price = $self->last_match( $order->product_id() );
 							my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
 							# needs to be rewritten to be more abstract
@@ -340,7 +340,7 @@ sub start($self) {
 					}
 				}
 				elsif ($order->type() eq 'done') {
-					$self->remove_all_timers( $order->order_id() ) if $self->reorders( $order->order_id() ); #remove all evnts for this order_id
+					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all evnts for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
@@ -369,11 +369,11 @@ sub start($self) {
 					$new_order->client_oid( $self->uuid->generate( $order->order_id() ) );
 
 
-					$self->reorders( $new_order->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
+					$self->reorder_timer( $new_order->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
 
-					$self->log( $self->reorders( $new_order->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $new_order->client_oid() );
+					$self->log( $self->reorder_timer( $new_order->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $new_order->client_oid() );
 
-					$self->reorders( $new_order->client_oid() )->start_timer( filled => sub { 
+					$self->reorder_timer( $new_order->client_oid() )->start_timer( filled => sub { 
 								$self->log('executing order client_oid:', $new_order->client_oid()); 
 								$self->orders->place_new_order( $new_order->build()->no_class() ) });
 					
@@ -386,7 +386,7 @@ sub start($self) {
 						$order_id = $order->taker_order_id() 
 					}
 					elsif ($self->order_details( $order->maker_order_id() )) {
-						$self->remove_all_timers( $order->maker_order_id() ) if $self->reorders( $order->maker_order_id() ); 
+						$self->remove_all_timers( $order->maker_order_id() ) if $self->reorder_timer( $order->maker_order_id() ); 
 						$order_id = $order->maker_order_id() 
 					}
 					else {
