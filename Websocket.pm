@@ -59,6 +59,7 @@ use Class::Struct( 'Toyhouse::Websocket' => {
 	asks			=> '%',
 
 	order_details 	=> '%', # order_id => %order
+	reorder_details => '%', # order_id => Toyhouse::Model::Order
 	reorder_timer 		=> '%', # order_id => Toyhouse::Model::Metadata::Timer
 
 	last_match	 	=> '%', # 'BTC-USD' => price # using track_order data for this
@@ -339,14 +340,17 @@ sub start($self) {
 						});
 					}
 				}
-				elsif ($order->type() eq 'done') {
+				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) ; $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) )	} # make sure reorder_details exists or return
 					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all evnts for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
 
-					my $new_order = Toyhouse::Model::Order->new(); # prepare a new order
+					#my $new_order = Toyhouse::Model::Order->new(); # prepare a new order # replaced with $self->reorder_details( $order->order_id() )
 					my ($new_side, $new_price, $new_size, $order_delay) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
+
+					# create a new reorder if one doesn't currently exist
+					$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) ) unless $self->reorder_details( $order->order_id() );
 
 					my $price_move_amount = 0;
  					if ($order->reason() eq 'filled') {
@@ -362,20 +366,18 @@ sub start($self) {
 
 					$new_price = ($new_side eq 'sell') ? $self->clean_quote($order->product_id(), ($order->price() +$price_move_amount)) : $self->clean_quote($order->product_id(), ($order->price() -$price_move_amount));
 
-					$new_order->price( $new_price );
-					$new_order->side( $new_side );
-					$new_order->product_id($order->product_id());
-					$new_order->size( $new_size );
-					$new_order->client_oid( $self->uuid->generate( $order->order_id() ) );
+					$self->reorder_details( $order->order_id() )->price( $new_price );
+					$self->reorder_details( $order->order_id() )->side( $new_side );
+					$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
 
+					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
 
-					$self->reorder_timer( $new_order->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
+					$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
 
-					$self->log( $self->reorder_timer( $new_order->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $new_order->client_oid() );
-
-					$self->reorder_timer( $new_order->client_oid() )->start_timer( filled => sub { 
-								$self->log('executing order client_oid:', $new_order->client_oid()); 
-								$self->orders->place_new_order( $new_order->build()->no_class() ) });
+					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->start_timer( filled => sub {
+						$self->log( 'executing order client_oid:', $self->reorder_details( $order->order_id() )->client_oid() ); 
+						$self->orders->place_new_order( $self->reorder_details( $order->order_id() )->build()->no_class() ) 
+					});
 					
 					# clean up $order->order_id()
 					delete $self->order_details()->{$order->order_id()} if $self->order_details( $order->order_id() );
