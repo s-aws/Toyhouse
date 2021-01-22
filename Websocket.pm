@@ -321,6 +321,7 @@ sub start($self) {
 						$self->reorders( $order->order_id() )->start_timer(open => sub {
 							my $most_recent_match_price = $self->last_match( $order->product_id() );
 							my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
+							# needs to be rewritten to be more abstract
 							if ( $self->order_details( $order->order_id() )->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
 								$self->log( 'failing to cancel, remaining_size is too small:', $self->order_details( $order->order_id() )->remaining_size() );
 								$self->remove_all_timers( $order->order_id() );
@@ -329,10 +330,13 @@ sub start($self) {
 								$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
 								$self->cancel_order_id( $order->order_id() )
 							}
-							else { #too far away, do nothing (for now)
-								$self->log( 'order_id', $order->order_id(), 'is too far away:', ($distance || 'undefined'), 'doing nothing' );
+							elsif ($distance && ($distance < ($self->too_far_percent() *2))) {
+								$self->log( 'order_id', $order->order_id(), 'should be moved forward:', $distance);
 							}
-	 					});
+							else {
+								$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
+							}
+						});
 					}
 				}
 				elsif ($order->type() eq 'done') {
