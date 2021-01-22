@@ -248,14 +248,14 @@ sub get_avg_ticks($self, $order, $scope=1) { #base scope = 60
 	my ($most_recent, $time, $low, $high, $open, $close, $volume) = (0, 0, 1, 2, 3, 4, 5);
 	my $p = $self->order_tracker( $order->product_id() );
 
-	my $avg = 0;
+	my $total = 0;
 	my $i = 0;
 	while ($p->[$i]->[$time] >= ($p->[$most_recent]->[$time] - $scope)) {
-		$avg += ( $p->[$i]->[$low] + $p->[$i]->[$high] );
+		$total += ( $p->[$i]->[$low] + $p->[$i]->[$high] );
 		$i++;
 	}
 
-	return $self->clean_quote($order->product_id(), ( $avg / ($i * 2) ));
+	return $self->clean_quote($order->product_id(), ( $total / ($i * 2) ));
 }
 
 sub is_greater_than_colorful($self, $x, $y) {
