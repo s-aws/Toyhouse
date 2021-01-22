@@ -346,13 +346,13 @@ sub start($self) {
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
 
-					my ($new_side, $new_price, $new_size, $order_delay) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
+					my ($new_side, $new_price, $new_size, $order_delay_secs) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
 					my $price_move_amount = 0;
 
  					if ($order->reason() eq 'filled') {
  						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
  						$new_side = 'sell' if $order->side eq 'buy';
- 						$order_delay *= $self->order_delay_sec();
+ 						$order_delay_secs *= $self->order_delay_sec();
  						$new_size = $self->order_details( $order->order_id() )->size(); #because we're filled, we must use size from the received message
 					}
 					else {
@@ -366,7 +366,7 @@ sub start($self) {
 					$self->reorder_details( $order->order_id() )->side( $new_side );
 					$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
 
-					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay )->build() );
+					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay_secs )->build() );
 
 					$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
 
