@@ -279,23 +279,29 @@ sub random_order_delay($int=60) {
 }
 
 sub cancel_order_id($self, $order_id) {
-	$self->log('canceling order id', $order_id);
-	$self->orders->cancel_order( $order_id );
+	$self->log('canceled order id', $order_id) if $self->orders->cancel_order( $order_id );
 }
 
 sub remove_all_timers($self, $order_id=undef) { return unless $order_id;
 	do {
+		$self->log( 'removing all event timers for', $order_id );		
 		$self->reorder_timer( $order_id )->remove_all_timers(); 
 		delete $self->reorder_timer()->{ $order_id }
 	} if $self->reorder_timer( $order_id );
 }
 
 sub remove_reorder_details($self, $order_id=undef) { return unless $order_id;
-	delete $self->reorder_details()->{ $order_id } if $self->reorder_details( $order_id );
+	do {
+		$self->log( 'removing', $order_id, 'reorder details' );	
+		delete $self->reorder_details()->{ $order_id } 
+	} if $self->reorder_details( $order_id );
 }
 
 sub remove_order_details($self, $order_id=undef) {
-	delete $self->order_details()->{ $order_id } if $self->order_details( $order_id );
+	do {
+		$self->log( 'removing', $order_id, 'order details' );
+		delete $self->order_details()->{ $order_id } 
+	} if $self->order_details( $order_id );
 }
 
 sub cleanup($self, $order_id = undef) { return unless $order_id;
@@ -398,9 +404,8 @@ sub start($self) {
 						$order_id = $order->taker_order_id() 
 					}
 					elsif ($self->order_details( $order->maker_order_id() )) {
-						$self->remove_all_timers( $order->maker_order_id() ) if $self->reorder_timer( $order->maker_order_id() ); 
+						$self->remove_all_timers( $order->maker_order_id() ); 
 						$order_id = $order->maker_order_id();
-						$self->log( 'maker match occurred, removing event timers for', $order_id );						
 					}
 					else {
 						return # must be a market order or we haven't gotten a receive message
