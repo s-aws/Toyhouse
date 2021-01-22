@@ -340,19 +340,15 @@ sub start($self) {
 						});
 					}
 				}
-				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) ; $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) )	} # make sure reorder_details exists or return
-					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all evnts for this order_id
+				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) ) } # make sure reorder_details exists or return
+					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all events for this order_id
 
 					return $self->display('proper size not listed for order_id:', $order->order_id()) # This actually doesn't return anything but outputs a message to STDERR, don't be fooled
 						unless (($self->order_details( $order->order_id() ) && ($self->order_details( $order->order_id() )->remaining_size() || $self->order_details( $order->order_id() )->size())) || ($order->remaining_size() >= $self->minimum_size( $order->product_id() )) );
 
-					#my $new_order = Toyhouse::Model::Order->new(); # prepare a new order # replaced with $self->reorder_details( $order->order_id() )
 					my ($new_side, $new_price, $new_size, $order_delay) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
-
-					# create a new reorder if one doesn't currently exist
-					$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() ) ) unless $self->reorder_details( $order->order_id() );
-
 					my $price_move_amount = 0;
+
  					if ($order->reason() eq 'filled') {
  						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
  						$new_side = 'sell' if $order->side eq 'buy';
