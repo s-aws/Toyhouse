@@ -331,7 +331,7 @@ sub start($self) {
 					$self->reorder_timer( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
 					$self->log("client_oid:", $order->client_oid(), "= order_id:", $order->order_id()); # for visibility
 				}
-				elsif ($order->type() eq 'open') { $self->order_details( $order->order_id() )->type( $order->type() );
+				elsif ($order->type() eq 'open') { return unless $self->reorder_details( $order->order_id() ); $self->order_details( $order->order_id() )->type( $order->type() );
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
 					$self->reorder_timer( $order->order_id() )->start_timer(open => sub {
 						my $most_recent_match_price = $self->last_match( $order->product_id() );
@@ -353,7 +353,7 @@ sub start($self) {
 						}
 					});
 				}
-				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { $self->cleanup( $order->order_id() ); return unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() ) } # make sure reorder_details exists or return
+				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return $self->cleanup( $order->order_id() ) unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() ) } # make sure reorder_details exists or return
 					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all events for this order_id
 
 					my ($new_side, $new_price, $new_size, $order_delay_secs) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
