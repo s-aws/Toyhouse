@@ -199,17 +199,17 @@ sub display_order_in_console($self, $order) {
 	unless ($self->console()) {
 		$self->display(
 			($order->order_id() || 
-				($self->reorder_timer($order->maker_order_id()) ? $order->maker_order_id() : $order->taker_order_id())), 
+				($self->reorder_details($order->maker_order_id()) ? $order->maker_order_id() : $order->taker_order_id())), 
 			$order->product_id(), 
 			($order->reason() ? join(':', $order->type(), $order->reason()) : $order->type()), 
 			$order->side(), 
 			$order->price(), 
 			($order->size() || 
 				$order->remaining_size() || 
-				(($self->reorder_timer( $order->order_id() ) && 
-					($self->reorder_timer( $order->order_id() )->remaining_size() || 
-					($self->reorder_timer( $order->taker_order_id() ) && $self->reorder_timer( $order->taker_order_id() )->remaining_size())  || 
-					($self->reorder_timer( $order->maker_order_id() ) && $self->reorder_timer( $order->maker_order_id() )->remaining_size()) )))) || 
+				(($self->reorder_details( $order->order_id() ) && 
+					($self->reorder_details( $order->order_id() )->size() || 
+					($self->reorder_details( $order->taker_order_id() ) && $self->reorder_details( $order->taker_order_id() )->size())  || 
+					($self->reorder_details( $order->maker_order_id() ) && $self->reorder_details( $order->maker_order_id() )->size()) )))) || 
 			"" );
 		return
 	}
