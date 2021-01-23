@@ -52,4 +52,13 @@ sub start_timer($self, $type, $coderef) {
 
 	$self
 }
+
+sub start_recurring_timer($self, $type, $coderef) {
+	die "unable to call type $type" unless $self->$type(); my $typeid = $type . "_id";
+
+	$self->$typeid(
+		Mojo::IOLoop->singleton->reactor->recurring( $self->$type() => $coderef )) if $type =~ /canceled|remainok|filled|match|open|received|done/;
+
+	$self
+}
 1
