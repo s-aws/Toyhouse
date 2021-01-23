@@ -339,7 +339,7 @@ sub start($self) {
 				}
 				elsif ($order->type() eq 'open') { return unless $self->reorder_details( $order->order_id() );
 					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
-					$self->reorder_timer( $order->order_id() )->start_timer(open => sub {
+					$self->reorder_timer( $order->order_id() )->start_recurring_timer(open => sub {
 						my $most_recent_match_price = $self->last_match( $order->product_id() );
 						my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
 
