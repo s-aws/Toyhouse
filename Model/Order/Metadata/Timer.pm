@@ -22,7 +22,7 @@ use Class::Struct ('Toyhouse::Model::Order::Metadata::Timer' => {
 
 our $DEFAULT_SECONDS = 60;
 our $FILLED_ORDER_MULTIPLIER = 2; # order has just been filled timer
-our $OPEN_ORDER_MULTIPLIER = 60; # open order with timer to cancel
+our $OPEN_ORDER_MULTIPLIER = 60; # open order timer to cancel
 
 sub build($self) {
 	$self->canceled($DEFAULT_SECONDS) unless $self->canceled();
