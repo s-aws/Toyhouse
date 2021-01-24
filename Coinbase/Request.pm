@@ -74,7 +74,7 @@ sub send($self) {
 	$r->res->error(undef) if $r->res->error() && ($r->res->error->{code} == 429); #reset error throttle flag if it exists
 
 	unless ( $r->res->error() && ($r->res->error->{code} != 404)) { $r->res->content() }
-	else { die "Did not complete as expected. ", $r->res->error->{message} } 	
+	else { die "Did not complete as expected. ", $r->res->error->{message}, $r->res->content->asset->{content} } 	
 }
 
 
