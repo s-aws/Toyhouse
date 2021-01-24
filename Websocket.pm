@@ -94,7 +94,7 @@ sub init($self) {
 	$self->base_re_pct( filled => 0.0075 );
 	$self->base_re_pct( canceled => 0.0005 );
 	$self->order_delay_sec(60);
-	$self->too_far_percent(0.05);
+	$self->too_far_percent(0.01);
 
 	$self->products(	Toyhouse::Coinbase::MarketData::Products->new( 	req => $self->request() ));
 	$self->orders(		Toyhouse::Coinbase::Private::Orders->new( 		req => $self->request() ));
@@ -162,7 +162,8 @@ sub minimum_size($self, $product_id) {
 
 sub display_historical_ticks_average_versus_order($self, $order) {
 	return unless $self->console();
-	my ($line, $col) = ($self->console_prod_loc( $order->product_id() ) > 63) ? ($self->console_prod_loc( $order->product_id() ) - 63+1, 160) : ($self->console_prod_loc( $order->product_id() )+1, 90);
+	my ($product_id, $price) = ($order->product_id(), $order->price());
+	my ($line, $col) = ($self->console_prod_loc( $product_id ) > 63) ? ($self->console_prod_loc( $product_id ) - 63+1, 160) : ($self->console_prod_loc( $product_id )+1, 90);
 	print STDOUT "\033[0;$col"."f\033[K". 
 		"\033[0;". ($col +6) ."f".	"MARKET". 
 		"\033[0;". ($col +18) ."f".	"TIME". 
@@ -179,20 +180,20 @@ sub display_historical_ticks_average_versus_order($self, $order) {
 
 	print STDOUT
 		"\033[$line;$col"."f\033[K" . 
-		"\033[$line;". ($col +6) ."f". $order->product_id(). 
+		"\033[$line;". ($col +6) ."f". $product_id. 
 		"\033[$line;". ($col +15) ."f". int( $order->time() ).
 #						(($order->side() eq 'buy') ? "\033[0;31m" : "\033[1;32m"). #start color
-		"\033[$line;". ($col +27) ."f". $self->clean_size($order->product_id(), $order->size()).
+		"\033[$line;". ($col +27) ."f". $self->clean_size($product_id, $order->size()).
 		"\033[$line;". ($col +42) ."f". (($order->side() eq 'buy') ? 'v' : '^').
-		"\033[$line;". ($col +48) ."f". $self->clean_quote($order->product_id(), $order->price()). 
+		"\033[$line;". ($col +48) ."f". $self->clean_quote($product_id, $price). 
 #						"\033[0m". #end color
-		"\033[$line;". ($col +60) ."f".			$self->is_greater_than_colorful( $self->get_avg_ticks($order => 1),		$order->price() ) .
-		"\033[$line;". ($col +60 +10 +2) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 15),	$order->price() ) .
-		"\033[$line;". ($col +60 +20 +4) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 60),	$order->price() ) .
-		"\033[$line;". ($col +60 +30 +6) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 120),	$order->price() ) .
-		"\033[$line;". ($col +60 +40 +8) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 180),	$order->price() ) .
-		"\033[$line;". ($col +60 +50 +10) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 1440),	$order->price() ) .
-		"\033[$line;". ($col +60 +60 +12) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($order => 10080),	$order->price() );
+		"\033[$line;". ($col +60) ."f".			$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 1),	$price ) .
+		"\033[$line;". ($col +60 +10 +2) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 15),	$price ) .
+		"\033[$line;". ($col +60 +20 +4) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 60),	$price ) .
+		"\033[$line;". ($col +60 +30 +6) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 120),	$price ) .
+		"\033[$line;". ($col +60 +40 +8) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 180),	$price ) .
+		"\033[$line;". ($col +60 +50 +10) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 1440),	$price ) .
+		"\033[$line;". ($col +60 +60 +12) ."f".	$self->is_greater_than_colorful( $self->get_avg_ticks($product_id => 10080),$price );
 }
 
 sub display_order_in_console($self, $order) {
@@ -243,20 +244,26 @@ sub track_order($self, $order, $type=60) { # type must be an int (size of the ti
 	$p->[$most_recent]->[$volume] += $order->size();
 }
 
-sub get_avg_ticks($self, $order, $scope=1) { #base scope = 60
+sub get_avg_ticks_for_last_minutes($self, $product_id, $scope=1) { # returns the average price in range
+	#base scope = 60
 	my $ticks_in_scope = 60; #each bucket is 60 ticks 
 	$scope *= $ticks_in_scope;
 	my ($most_recent, $time, $low, $high, $open, $close, $volume) = (0, 0, 1, 2, 3, 4, 5);
-	my $p = $self->order_tracker( $order->product_id() );
+	my $p = $self->order_tracker( $product_id );
 
 	my $total = 0;
 	my $i = 0;
+ 	
+	unless ($p->[$i]->[$time]) { $self->log('get_avg_ticks_for_last_minutes() has not yet recorded any matches for', $product_id); return} # If we have no records, stop
 	while ($p->[$i]->[$time] >= ($p->[$most_recent]->[$time] - $scope)) {
 		$total += ( $p->[$i]->[$low] + $p->[$i]->[$high] );
 		$i++;
 	}
 
-	return $self->clean_quote($order->product_id(), ( $total / ($i * 2) ));
+	my $result = $self->clean_quote($product_id, ( $total / ($i * 2) ));
+	$self->log("get_avg_ticks_for_last_minutes($product_id, $scope)", $result);
+
+	return $result
 }
 
 sub is_greater_than_colorful($self, $x, $y) {
@@ -310,6 +317,166 @@ sub cleanup($self, $order_id = undef) { return unless $order_id;
 	$self->remove_reorder_details( $order_id );
 }
 
+sub process_user_id_received_message($self, $order=undef) { return unless $order->client_oid(); # currently not handling orders that don't have a client_oid
+	$self->cleanup( $order->client_oid() ); # client_oid is used to track orders that we've placed.
+
+	# stores data used to calculate place_new_order() details
+	my $average_price_last_5_minutes = sub { $self->get_avg_ticks_for_last_minutes( $order->product_id(), 5 ) || $self->base_re_pct() };
+	my $percent_from_price_to_last_match = sub { my $most_recent_match_price = $self->last_match( $order->product_id() ); abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price };
+
+	$self->order_details( $order->order_id() => { type => $order->type(), remaining_size => $order->size(), percent_from_price_to_last_match => $percent_from_price_to_last_match, move_direction => 1, move_rate => 1 } );
+
+	# The following must exist in order for us to work with it
+	$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->size(), side => $order->side() )->build() ); 
+
+	# we handle order_id first because client_oid is only on received messages
+	$self->reorder_timer( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() );
+	$self->log("client_oid:", $order->client_oid(), "= order_id:", $order->order_id()); # for visibility	
+}
+
+sub process_user_id_open_message($self, $order=undef) {
+	return unless $self->reorder_details( $order->order_id() );
+	$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
+	$self->reorder_timer( $order->order_id() )->start_recurring_timer(open => sub {
+		my $distance = $self->order_details( $order->order_id() )->{percent_from_price_to_last_match}->();
+		my $move_rate = \$self->order_details( $order->order_id() )->{move_rate};
+		my $move_direction = \$self->order_details( $order->order_id() )->{move_direction};
+		if ( $order->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
+			$self->log( 'failing to cancel, remaining_size is too small:', $order->remaining_size() );
+			$self->cleanup( $order->order_id() );
+		}
+		elsif ($distance) { #This probably be done elsewhere so filled orders can also take advantage
+			if ($distance < $self->too_far_percent()) {
+				$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
+				$self->cancel_order_id( $order->order_id() )
+			}
+			elsif ($distance < ($self->too_far_percent() *2)) {
+				$$move_rate = 1/2;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *3)) {
+				$$move_rate = 1/3;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}		
+			elsif ($distance < ($self->too_far_percent() *5)) {
+				$$move_rate = 1/5;				
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *8)) {
+				$$move_rate = 1/5;			
+				$$move_direction = -1;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *13)) {
+				$$move_rate = 1/3;			
+				$$move_direction = -1;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *21)) {
+				$$move_rate = 1/2;
+				$$move_direction = -1;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *34)) {
+				$$move_rate = 1;
+				$$move_direction = -1;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			elsif ($distance < ($self->too_far_percent() *55)) {
+				$$move_rate = 1;
+				$$move_direction = -1;
+				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			}
+			else {
+				$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
+				return;
+			}
+			$self->cancel_order_id( $order->order_id() )			
+		}
+	});
+}
+
+sub process_user_id_match_message($self, $order=undef) {
+	my $order_id;
+	if ($self->order_details( $order->taker_order_id() )) { # there are no timers to remove
+		$self->log( $order->taker_order_id(), 'is a taker match' ); 
+		$order_id = $order->taker_order_id() 
+	}
+	elsif ($self->order_details( $order->maker_order_id() )) {
+		$self->remove_all_timers( $order->maker_order_id() ); 
+		$order_id = $order->maker_order_id();
+	}
+	else {
+		return # must be a market order or we haven't gotten a receive message
+	}
+
+	$self->order_details( $order_id )->{remaining_size} += -$order->size();
+	$self->dbh->record( $order->to_json() ) if $self->dbh(); 	
+}
+
+sub process_user_id_done_message($self, $order=undef) {
+	# make sure reorder_details exists or return
+	if (!$self->reorder_details( $order->order_id() )) { 
+		# We can work with a done message if the order has a remaining_size that is minimum_size or greater, 
+		# otherwise we will return because we need reorder_details.
+		return $self->cleanup( $order->order_id() ) unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); 
+
+		# setup a new reorder_details
+		$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() )
+	}
+
+	# event timers are no longer exist for this order id since we're processing it. If event timers are needed, we'll create them.
+	$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() );
+
+	# change message can cause remaining_size to be 0 on canceled message? (currently not handled)
+	my ($new_side, $new_price, $new_size, $order_delay_secs) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec()));
+
+	my $price_move_amount = 0;
+
+	if ($order->reason() eq 'filled') {
+		$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
+		$new_side = 'sell' if $order->side eq 'buy';
+		$order_delay_secs *= $self->order_delay_sec();
+		$new_size = $self->reorder_details( $order->order_id() )->size(); #because we're filled, we must use size from the received message
+	}
+	else {
+		my ($custom_move_rate_modifier,$custom_direction_modifier);
+		$price_move_amount = $order->price() *(rand($self->base_re_pct( 'canceled' )) +$self->base_re_pct( 'canceled' ));
+		$new_side = 'sell' if $order->side eq 'sell';
+
+		if ($self->order_details( $order->order_id() )) {
+			($custom_move_rate_modifier,$custom_direction_modifier) = ($self->order_details( $order->order_id() )->{move_rate}, $self->order_details( $order->order_id() )->{move_direction});
+			$price_move_amount *= $custom_move_rate_modifier;		
+			$price_move_amount *= $custom_direction_modifier;
+		}
+
+	}
+	
+	# The new price that will be placed once the order is executed.
+	$new_price = ($new_side eq 'sell') ? $self->clean_quote($order->product_id(), ($order->price() +$price_move_amount)) : $self->clean_quote($order->product_id(), ($order->price() -$price_move_amount));
+
+	$self->reorder_details( $order->order_id() )->price( $new_price );
+	$self->reorder_details( $order->order_id() )->side( $new_side );
+	$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
+
+
+	$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay_secs )->build() );
+	$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
+	$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->start_timer( filled => sub {
+
+		$self->log( 'executing order client_oid:', $self->reorder_details( $order->order_id() )->client_oid() ); 
+
+		$self->orders->place_new_order({
+			client_oid	=> $self->reorder_details( $order->order_id() )->client_oid(),
+			product_id	=> $self->reorder_details( $order->order_id() )->product_id(), 
+			side		=> $self->reorder_details( $order->order_id() )->side(),
+			size		=> $self->reorder_details( $order->order_id() )->size(),
+			price		=> $self->reorder_details( $order->order_id() )->price()});
+
+		$self->cleanup( $order->order_id() );
+	});						
+}
+
 sub start($self) {
 	$UA->websocket_p($URL)->then(sub ($tx) {
 		$self->profile_name( 'I am' ) unless $self->profile_name();
@@ -330,107 +497,28 @@ sub start($self) {
 				$self->display_order_in_console( $order );
 				$self->display_accounts_in_console();
 
-				if ($order->type() eq 'received') { return unless $order->client_oid(); # currently not handling orders that don't have a client_oid
-					$self->cleanup( $order->client_oid() );
-					$self->order_details( $order->order_id() => { type => $order->type(), remaining_size => $order->size() } );
-					$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->size(), side => $order->side() )->build() );
-					$self->reorder_timer( $order->order_id() => Toyhouse::Model::Order::Metadata::Timer->new->build() ); # we handle order_id first because client_oid is only on received messages
-					$self->log("client_oid:", $order->client_oid(), "= order_id:", $order->order_id()); # for visibility
-				}
-				elsif ($order->type() eq 'open') { return unless $self->reorder_details( $order->order_id() );
-					$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
-					$self->reorder_timer( $order->order_id() )->start_recurring_timer(open => sub {
-						my $most_recent_match_price = $self->last_match( $order->product_id() );
-						my $distance = abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price;
-
-						if ( $order->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
-							$self->log( 'failing to cancel, remaining_size is too small:', $order->remaining_size() );
-							$self->cleanup( $order->order_id() );
-						}
-						elsif ($distance && ($distance < $self->too_far_percent())) {
-							$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
-							$self->cancel_order_id( $order->order_id() )
-						}
-						elsif ($distance && ($distance < ($self->too_far_percent() *2))) {
-							$self->log( 'order_id', $order->order_id(), 'should be moved forward:', $distance);
-						}
-						else {
-							$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
-						}
-					});
-				}
-				elsif ($order->type() eq 'done') { if (!$self->reorder_details( $order->order_id() )) { return $self->cleanup( $order->order_id() ) unless $order->remaining_size() && ($order->remaining_size() >= $self->minimum_size( $order->product_id() )); $self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->remaining_size() )->build() ) } # make sure reorder_details exists or return
-					$self->remove_all_timers( $order->order_id() ) if $self->reorder_timer( $order->order_id() ); #remove all events for this order_id
-
-					my ($new_side, $new_price, $new_size, $order_delay_secs) = ('buy', 0, $order->remaining_size(), random_order_delay($self->order_delay_sec())); # change message can cause remaining_size to be 0 on canceled message? (currently not handled)
-					my $price_move_amount = 0;
-
- 					if ($order->reason() eq 'filled') {
- 						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
- 						$new_side = 'sell' if $order->side eq 'buy';
- 						$order_delay_secs *= $self->order_delay_sec();
- 						$new_size = $self->reorder_details( $order->order_id() )->size(); #because we're filled, we must use size from the received message
-					}
-					else {
-						$price_move_amount = $order->price() *(rand($self->base_re_pct( 'canceled' )) +$self->base_re_pct( 'canceled' ));
-						$new_side = 'sell' if $order->side eq 'sell';
-					}
-
-					$new_price = ($new_side eq 'sell') ? $self->clean_quote($order->product_id(), ($order->price() +$price_move_amount)) : $self->clean_quote($order->product_id(), ($order->price() -$price_move_amount));
-
-					$self->reorder_details( $order->order_id() )->price( $new_price );
-					$self->reorder_details( $order->order_id() )->side( $new_side );
-					$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
-
-
-					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay_secs )->build() );
-					$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
-					$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->start_timer( filled => sub {
-						$self->log( 'executing order client_oid:', $self->reorder_details( $order->order_id() )->client_oid() ); 
-
-						$self->orders->place_new_order({
-							client_oid	=> $self->reorder_details( $order->order_id() )->client_oid(),
-							product_id	=> $self->reorder_details( $order->order_id() )->product_id(), 
-							side		=> $self->reorder_details( $order->order_id() )->side(),
-							size		=> $self->reorder_details( $order->order_id() )->size(),
-							price		=> $self->reorder_details( $order->order_id() )->price()});
-
-						$self->cleanup( $order->order_id() );
-					});					
- 				}					
-				elsif ( $order->type eq 'match' ) { my $order_id;
-					if ($self->order_details( $order->taker_order_id() )) { # there are no timers to remove
-						$self->log( $order->taker_order_id(), 'is a taker match' ); 
-						$order_id = $order->taker_order_id() 
-					}
-					elsif ($self->order_details( $order->maker_order_id() )) {
-						$self->remove_all_timers( $order->maker_order_id() ); 
-						$order_id = $order->maker_order_id();
-					}
-					else {
-						return # must be a market order or we haven't gotten a receive message
-					}
-
-					$self->order_details( $order_id )->{remaining_size} += -$order->size();
-					$self->dbh->record( $order->to_json() ) if $self->dbh(); 
-				}
+				if ($order->type() eq 'received') { $self->process_user_id_received_message($order) }
+				elsif ($order->type() eq 'open') { $self->process_user_id_open_message($order) }
+				elsif ($order->type() eq 'done') { $self->process_user_id_done_message($order) }					
+				elsif ( $order->type eq 'match' ) { $self->process_user_id_match_message($order) }
  			}
- 			elsif ($order->type() eq 'match') {
-				$self->track_order($order);
-				if ($self->dbh) {
-					#only record minimal data;
-					# we set the product_id so it will be appended to the table_name we are writing to. 						
-					$self->dbh->product_id( $order->product_id() );
- 					# write the data to the $table_name_$product_id
-					$self->dbh->record( Toyhouse::Model::Order->new(
-						price		=> $order->price(),
-						product_id	=> $order->product_id(),
-						side		=> $order->side(),
-						size		=> $order->size(),
-						time		=> $order->time())->build->to_json());
+ 			else {
+ 				if ($order->type() eq 'match') {
+					$self->track_order($order);
+					if ($self->dbh) {
+						#only record minimal data;
+						# we set the product_id so it will be appended to the table_name we are writing to. 						
+						$self->dbh->product_id( $order->product_id() );
+	 					# write the data to the $table_name_$product_id
+						$self->dbh->record( Toyhouse::Model::Order->new(
+							price		=> $order->price(),
+							product_id	=> $order->product_id(),
+							side		=> $order->side(),
+							size		=> $order->size(),
+							time		=> $order->time())->build->to_json());
+					}
 				}
 			}
-
 		});
 
 		$tx->on(finish => sub { $self->display( ($self->console() ? "\033[K\033[75;0f" : ""), "disconnected" ); $self->start() }); #sub promise { this is a promise  that never ends, yes it goes on and on my friend.. some people started running it not knowing what it was, and they continue running it forever just because... promise()
