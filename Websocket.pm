@@ -370,47 +370,47 @@ sub process_user_id_open_message($self, $order=undef) {
 		elsif ($distance < ($self->too_far_percent() *2)) {
 			$$move_delay = $$move_delay * 1;
 			$$move_rate = 1/2;
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *3)) {
 			$$move_delay = $$move_delay * 2;
 			$$move_rate = 1/3;
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}		
 		elsif ($distance < ($self->too_far_percent() *5)) {
 			$$move_delay = $$move_delay * 3;			
 			$$move_rate = 1/5;				
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *8)) {
 			$$move_delay = $$move_delay * 5;
 			$$move_rate = 1/5;			
 			$$move_direction = -1;
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *13)) {
 			$$move_delay = $$move_delay * 8;			
 			$$move_rate = 1/3;			
 			$$move_direction = -1;
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *21)) {
 			$$move_delay = $$move_delay * 13;			
 			$$move_rate = 1/2;
 			$$move_direction = -1;
-			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *34)) {
 			$$move_delay = $$move_delay * 21;			
 			$$move_rate = 1;
 			$$move_direction = -1;
-			$self->log( 'order_id', $order->order_id(), 'move rate:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		elsif ($distance < ($self->too_far_percent() *55)) {
 			$$move_delay = $$move_delay * 34;			
 			$$move_rate = 1;
 			$$move_direction = -1;
-			$self->log( 'order_id', $order->order_id(), 'move rate:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
 		else {
 			$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'not setting cancel event timer' );
