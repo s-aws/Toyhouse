@@ -93,7 +93,7 @@ sub init($self) {
 
 	$self->base_re_pct( filled => 0.0075 );
 	$self->base_re_pct( canceled => 0.0005 );
-	$self->order_delay_sec(60);
+	$self->order_delay_sec(1800);
 	$self->too_far_percent(0.01);
 
 	$self->products(	Toyhouse::Coinbase::MarketData::Products->new( 	req => $self->request() ));
@@ -323,8 +323,9 @@ sub process_user_id_received_message($self, $order=undef) { return unless $order
 	# stores data used to calculate place_new_order() details
 	my $average_price_last_5_minutes = sub { $self->get_avg_ticks_for_last_minutes( $order->product_id(), 5 ) || $self->base_re_pct() };
 	my $percent_from_price_to_last_match = sub { my $most_recent_match_price = $self->last_match( $order->product_id() ); abs($most_recent_match_price - $order->price())/$most_recent_match_price if $most_recent_match_price };
+	my $order_delay_in_secs = $self->order_delay_sec();
 
-	$self->order_details( $order->order_id() => { type => $order->type(), remaining_size => $order->size(), percent_from_price_to_last_match => $percent_from_price_to_last_match, move_direction => 1, move_rate => 1 } );
+	$self->order_details( $order->order_id() => { type => $order->type(), remaining_size => $order->size(), percent_from_price_to_last_match => $percent_from_price_to_last_match, move_direction => 1, move_rate => 1 , order_delay_in_secs => $order_delay_in_secs } );
 
 	# The following must exist in order for us to work with it
 	$self->reorder_details( $order->order_id() => Toyhouse::Model::Order->new( product_id => $order->product_id(), size => $order->size(), side => $order->side() )->build() ); 
@@ -336,64 +337,88 @@ sub process_user_id_received_message($self, $order=undef) { return unless $order
 
 sub process_user_id_open_message($self, $order=undef) {
 	return unless $self->reorder_details( $order->order_id() );
-	$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open(), 'seconds' );
-	$self->reorder_timer( $order->order_id() )->start_recurring_timer(open => sub {
-		my $distance = $self->order_details( $order->order_id() )->{percent_from_price_to_last_match}->();
-		my $move_rate = \$self->order_details( $order->order_id() )->{move_rate};
-		my $move_direction = \$self->order_details( $order->order_id() )->{move_direction};
-		if ( $order->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
-			$self->log( 'failing to cancel, remaining_size is too small:', $order->remaining_size() );
-			$self->cleanup( $order->order_id() );
+	my $distance = $self->order_details( $order->order_id() )->{percent_from_price_to_last_match}->();
+	my $move_rate = \$self->order_details( $order->order_id() )->{move_rate};
+	my $move_direction = \$self->order_details( $order->order_id() )->{move_direction};
+	my $move_delay = \$self->order_details( $order->order_id() )->{order_delay_in_secs};
+
+	if ( $order->remaining_size() < $self->products->product( $order->product_id() )->{base_min_size} ) {
+		$self->log( 'failing to set cancel timer event, remaining_size is too small:', $order->remaining_size() );
+		$self->cleanup( $order->order_id() );
+	}
+	elsif ($distance) { #This probably be done elsewhere so filled orders can also take advantage
+		if ($distance < ($self->too_far_percent()/5)) {
+			$$move_delay = ($$move_delay / $$move_delay) / 5;
+			$$move_rate = 1/3;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
-		elsif ($distance) { #This probably be done elsewhere so filled orders can also take advantage
-			if ($distance < $self->too_far_percent()) {
-				$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
-				$self->cancel_order_id( $order->order_id() )
-			}
-			elsif ($distance < ($self->too_far_percent() *2)) {
-				$$move_rate = 1/2;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *3)) {
-				$$move_rate = 1/3;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}		
-			elsif ($distance < ($self->too_far_percent() *5)) {
-				$$move_rate = 1/5;				
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *8)) {
-				$$move_rate = 1/5;			
-				$$move_direction = -1;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *13)) {
-				$$move_rate = 1/3;			
-				$$move_direction = -1;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *21)) {
-				$$move_rate = 1/2;
-				$$move_direction = -1;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *34)) {
-				$$move_rate = 1;
-				$$move_direction = -1;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			elsif ($distance < ($self->too_far_percent() *55)) {
-				$$move_rate = 1;
-				$$move_direction = -1;
-				$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
-			}
-			else {
-				$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'doing nothing' );
-				return;
-			}
-			$self->cancel_order_id( $order->order_id() )			
+		elsif ($distance < ($self->too_far_percent()/3)) {
+			$$move_delay = ($$move_delay / $$move_delay) / 3;				
+			$$move_rate = 1/3;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
+		}			
+		elsif ($distance < ($self->too_far_percent()/2)) {
+			$$move_delay = ($$move_delay / $$move_delay) / 2;				
+			$$move_rate = 1/2;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction, 'move_delay: ', $$move_delay );
 		}
-	});
+		elsif ($distance < $self->too_far_percent()) {
+			$$move_delay = ($$move_delay / $$move_delay);
+			$self->log( $order->order_id(), 'has expired and is', $distance, 'from last match' );
+			$self->cancel_order_id( $order->order_id() )
+		}			
+		elsif ($distance < ($self->too_far_percent() *2)) {
+			$$move_delay = $$move_delay * 1;
+			$$move_rate = 1/2;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *3)) {
+			$$move_delay = $$move_delay * 2;
+			$$move_rate = 1/3;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}		
+		elsif ($distance < ($self->too_far_percent() *5)) {
+			$$move_delay = $$move_delay * 3;			
+			$$move_rate = 1/5;				
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *8)) {
+			$$move_delay = $$move_delay * 5;
+			$$move_rate = 1/5;			
+			$$move_direction = -1;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *13)) {
+			$$move_delay = $$move_delay * 8;			
+			$$move_rate = 1/3;			
+			$$move_direction = -1;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *21)) {
+			$$move_delay = $$move_delay * 13;			
+			$$move_rate = 1/2;
+			$$move_direction = -1;
+			$self->log( 'order_id', $order->order_id(), 'move rate decreased by:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *34)) {
+			$$move_delay = $$move_delay * 21;			
+			$$move_rate = 1;
+			$$move_direction = -1;
+			$self->log( 'order_id', $order->order_id(), 'move rate:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		elsif ($distance < ($self->too_far_percent() *55)) {
+			$$move_delay = $$move_delay * 34;			
+			$$move_rate = 1;
+			$$move_direction = -1;
+			$self->log( 'order_id', $order->order_id(), 'move rate:', $$move_rate, 'distance:', $distance, 'direction' => $$move_direction);
+		}
+		else {
+			$self->log( 'order_id', $order->order_id(), 'is too far:', ($distance || 'undefined'), 'not setting cancel event timer' );
+			return;
+		}
+		$self->log( 'setting order_id', $order->order_id(), 'cancel timer for', $self->reorder_timer( $order->order_id() )->open( $$move_delay ), 'seconds' );
+		$self->reorder_timer( $order->order_id() )->start_timer(open => sub { $self->cancel_order_id( $order->order_id() ) })
+	}
 }
 
 sub process_user_id_match_message($self, $order=undef) {
@@ -436,7 +461,7 @@ sub process_user_id_done_message($self, $order=undef) {
 	if ($order->reason() eq 'filled') {
 		$price_move_amount = $order->price() *(rand($self->base_re_pct( 'filled' )) +$self->base_re_pct( 'filled' ));
 		$new_side = 'sell' if $order->side eq 'buy';
-		$order_delay_secs *= $self->order_delay_sec();
+		#$order_delay_secs *= $self->order_delay_sec();
 		$new_size = $self->reorder_details( $order->order_id() )->size(); #because we're filled, we must use size from the received message
 	}
 	else {
@@ -459,8 +484,8 @@ sub process_user_id_done_message($self, $order=undef) {
 	$self->reorder_details( $order->order_id() )->side( $new_side );
 	$self->reorder_details( $order->order_id() )->client_oid( $self->uuid->generate( $order->order_id() ) );
 
-
-	$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => $order_delay_secs )->build() );
+	$order_delay_secs = $self->order_details( $order->order_id() )->{order_delay_in_secs} if $self->order_details( $order->order_id() );
+	$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() => Toyhouse::Model::Order::Metadata::Timer->new( filled => 0.1 )->build() ); # testing # $order_delay_secs
 	$self->log( $self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->filled(), 'sec place_order delay for order_id:', $order->order_id(), '=> client_oid:', $self->reorder_details( $order->order_id() )->client_oid() );
 	$self->reorder_timer( $self->reorder_details( $order->order_id() )->client_oid() )->start_timer( filled => sub {
 
