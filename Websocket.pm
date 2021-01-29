@@ -33,6 +33,8 @@ use Class::Struct( 'Toyhouse::Websocket' => {
 
 	storage			=> '$',
 	dbh				=> 'Toyhouse::MariaDB',
+	order_table_id	=> '%', # order_id => id # The id of the order_id in mariadb
+	rec_all_matches	=> '$',
 
 	signer			=> 'Toyhouse::Signer',
 	ua 				=> 'Mojo::UserAgent',
@@ -90,7 +92,6 @@ sub init($self) {
 	$self->request( Toyhouse::Coinbase::Request->new() )->build();
 	$self->connect_count(0) unless $self->connect_count();
 	$self->json_count(0);
-
 	$self->base_re_pct( filled => 0.0075 );
 	$self->base_re_pct( canceled => 0.0005 );
 	$self->order_delay_sec(1800);
@@ -107,7 +108,7 @@ sub init($self) {
 		$self->accounts->update_accounts();
 		$self->display_accounts_in_console();
 		foreach my $product_id (@{ $self->product_ids() }) {
-			$self->reorder_timer( $product_id => {} );
+		#$self->reorder_timer( $product_id => {} ); # we just use order_id now instead of product_id => order_id
 		}		
 	}
 	else {} # if we're subscribed to full, we shouldn't be authenticate to the websocket. Processing user_id are preferred on their own stream since we are actively processing each full message
@@ -317,7 +318,12 @@ sub cleanup($self, $order_id = undef) { return unless $order_id;
 	$self->remove_reorder_details( $order_id );
 }
 
+sub total_event_timers($self) {
+	$self->log("total event timers:", scalar keys(%{ $self->reorder_timer() })) if $self->reorder_timer();
+}
+
 sub process_user_id_received_message($self, $order=undef) { return unless $order->client_oid(); # currently not handling orders that don't have a client_oid
+	$self->order_table_id( $order->order_id() => $self->dbh->record_user_id_order_ids($order) ) if $self->dbh();
 	$self->cleanup( $order->client_oid() ); # client_oid is used to track orders that we've placed.
 
 	# stores data used to calculate place_new_order() details
@@ -438,7 +444,7 @@ sub process_user_id_match_message($self, $order=undef) {
 	$self->dbh->record( $order->to_json() ) if $self->dbh(); 	
 }
 
-sub process_user_id_done_message($self, $order=undef) {
+sub process_user_id_done_message($self, $order=undef) { $self->dbh->disable_order_by_table_id( $order, $self->order_table_id( $order->order_id() ) ) if $self->order_table_id( $order->order_id() );
 	# make sure reorder_details exists or return
 	if (!$self->reorder_details( $order->order_id() )) { 
 		# We can work with a done message if the order has a remaining_size that is minimum_size or greater, 
@@ -498,7 +504,8 @@ sub process_user_id_done_message($self, $order=undef) {
 			price		=> $self->reorder_details( $order->order_id() )->price()});
 
 		$self->cleanup( $order->order_id() );
-	});						
+	});	
+	$self->total_event_timers();
 }
 
 sub start($self) {
@@ -529,7 +536,7 @@ sub start($self) {
  			else {
  				if ($order->type() eq 'match') {
 					$self->track_order($order);
-					if ($self->dbh) {
+					if ($self->dbh && $self->rec_all_matches) {
 						#only record minimal data;
 						# we set the product_id so it will be appended to the table_name we are writing to. 						
 						$self->dbh->product_id( $order->product_id() );
