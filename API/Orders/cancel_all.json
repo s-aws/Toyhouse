@@ -1,0 +1,14 @@
+{
+  "request": [
+    "DELETE",
+    "/orders"
+  ],
+  "permissions": [
+    "trade"
+  ],
+  "query_parameters": [
+    {
+      "product_id": "$product_id"
+    }
+  ]
+}

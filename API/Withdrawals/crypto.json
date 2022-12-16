@@ -1,0 +1,27 @@
+{
+  "request": [
+    "POST",
+    "/withdrawals",
+    "crypto"
+  ],
+  "permissions": [
+    "transfer"
+  ],
+  "parameters": [
+    {
+      "amount": "$amount"
+    },
+    {
+      "currency": "$currency"
+    },
+    {
+      "crypto_address": "$crypto_address"
+    },
+    {
+      "destination_tag": "$destination_tag"
+    },
+    {
+      "no_destination_tag": "$no_destination_tag"
+    }
+  ]
+}

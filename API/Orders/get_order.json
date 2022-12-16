@@ -1,0 +1,22 @@
+{
+  "request": [
+    "GET",
+    "/orders",
+    "$id",
+    {
+      "client": "$client_oid"
+    }
+  ],
+  "permissions": [
+    "trade",
+    "view"
+  ],
+  "query_parameters": [
+    {
+      "product_id": "$product_id"
+    },
+    {
+      "status": "$status"
+    }
+  ]
+}

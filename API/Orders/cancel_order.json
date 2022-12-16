@@ -1,0 +1,18 @@
+{
+  "request": [
+    "DELETE",
+    "/orders",
+      "$id",
+    {
+      "client": "$client_oid"
+    }
+  ],
+  "permissions": [
+    "trade"
+  ],
+  "query_parameters": [
+    {
+      "product_id": "$product_id"
+    }
+  ]
+}

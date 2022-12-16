@@ -1,0 +1,107 @@
+{
+  "limit": [
+    {
+      "type": "received",
+      "time": "$date",
+      "product_id": "$product_id",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "size": "$float",
+      "price": "$float",
+      "side": "$side",
+      "order_type": "limit"
+    },
+    {
+      "type": "done",
+      "time": "$date",
+      "product_id": "$product_id",
+      "sequence": "$integer",
+      "price": "$float",
+      "order_id": "$order_id",
+      "reason": "$reason",
+      "side": "$side",
+      "remaining_size": "$float"
+    }
+  ],
+  "market": [
+    {
+      "type": "received",
+      "time": "$date",
+      "product_id": "$product_id",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "funds": "$float",
+      "side": "$side",
+      "order_type": "market"
+    },
+    {
+      "type": "done",
+      "time": "$date",
+      "product_id": "$product_id",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "reason": "$reason",
+      "side": "$side"
+    }
+  ],
+  "general": [
+    {
+      "type": "match",
+      "trade_id": "$integer",
+      "sequence": "$integer",
+      "maker_order_id": "$order_id",
+      "taker_order_id": "$order_id",
+      "time": "$date",
+      "product_id": "$product_id",
+      "size": "$float",
+      "price": "$float",
+      "side": "$side"
+    },
+    {
+      "type": "open",
+      "time": "$date",
+      "product_id": "$product_id",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "price": "$float",
+      "remaining_size": "$float",
+      "side": "$side"
+    },
+    {
+      "type": "change",
+      "time": "$date",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "product_id": "$product_id",
+      "new_size": "$float",
+      "old_size": "$float",
+      "price": "$float",
+      "side": "$side"
+    },
+    {
+      "type": "change",
+      "time": "$date",
+      "sequence": "$integer",
+      "order_id": "$order_id",
+      "product_id": "$product_id",
+      "new_funds": "$float",
+      "old_funds": "$float",
+      "price": "$float",
+      "side": "$side"
+    },
+    {
+      "type": "activate",
+      "product_id": "$product_id",
+      "timestamp": "$float",
+      "user_id": "$integer",
+      "profile_id": "$order_id",
+      "order_id": "$order_id",
+      "stop_type": "$stop_type",
+      "side": "$side",
+      "stop_price": "$float",
+      "size": "$float",
+      "funds": "$float",
+      "private": "true"
+    }
+  ]
+}

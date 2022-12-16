@@ -1,0 +1,21 @@
+{
+  "request": [
+    "GET",
+    "/accounts",
+    "$account_id",
+    "holds"
+  ],
+  "permissions": [
+    "view",
+    "trade"
+  ],
+  "fields": [
+    "id",
+    "account_id",
+    "amount",
+    "created_at",
+    "updated_at",
+    "type",
+    "ref"
+  ]
+}

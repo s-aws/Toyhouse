@@ -1,0 +1,20 @@
+{
+  "request": [
+    "POST",
+    "/conversions"
+  ],
+  "permissions": [
+    "trade"
+  ],
+  "parameters": [
+    {
+      "from": "$from"
+    },
+    {
+      "to": "$to"
+    },
+    {
+      "amount": "$amount"
+    }
+  ]
+}

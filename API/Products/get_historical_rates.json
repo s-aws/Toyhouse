@@ -1,0 +1,19 @@
+{
+  "request": [
+    "GET",
+    "/products",
+    "$product_id",
+    "candles"
+  ],
+  "query_parameters": [
+    {
+      "start": "$start"
+    },
+    {
+      "end": "$end"
+    },
+    {
+      "granularity": "$granularity"
+    }
+  ]  
+}

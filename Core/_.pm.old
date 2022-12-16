@@ -1,0 +1,59 @@
+package secure {
+	BEGIN {	
+
+		require Math::Random::Secure;
+		*rand 				= *Math::Random::Secure::rand;
+		my $max32bit 		= 2^32;
+		sub nonce {
+			rand($max32bit)
+		}
+
+		require Digest::SHA;	import Digest::SHA;
+		*hmac_sha256 		= *Digest::SHA::hmac_sha256;
+		*hmac_sha256_hex 	= *Digest::SHA::hmac_sha256_hex;
+		sub hmac_sha256_hex_w_nonce {
+			hmac_sha256_hex(@_, nonce())
+		}
+
+		require MIME::Base64; 	import MIME::Base64 	();
+		*encode_base64 		= *MIME::Base64::encode_base64;
+		*decode_base64 		= *MIME::Base64::decode_base64;
+
+	}
+
+	1;
+}
+
+package json_tools {
+	BEGIN {
+
+		require JSON; import JSON ();
+		*encode_json = *JSON::encode_json;
+		*decode_json = *JSON::decode_json;
+	}
+
+	1;
+}
+
+package Toyhouse::Core::_ {
+	use warnings;
+	use strict;
+
+	*nonce 				= *secure::nonce;
+
+	*hmac_sha256 		= *secure::hmac_sha256;
+	*hmac_sha256_hex 	= *secure::hmac_sha256_hex;
+
+	*encode_base64 		= *secure::encode_base64;
+	*decode_base64 		= *secure::decode_base64;	
+
+	*encode_json 		= *json_tools::encode_json;
+	*decode_json 		= *json_tools::decode_json;
+
+	use Toyhouse::Core::_::Https;
+	*new_https_connection = *Toyhouse::Core::_::Https::new_connection;
+	*hmac_sha256_hex_w_nonce = sub {secure::hmac_sha256_hex_w_nonce(@_, nonce())};
+
+	1;
+}
+

@@ -1,0 +1,36 @@
+{
+  "request": [
+    "POST",
+    "/orders"
+  ],
+  "permissions": [
+    "trade"
+  ],
+  "parameters": [
+    "client_oid",
+    "side",
+    {
+      "type": [
+        {
+          "market": [
+            "size",
+            "funds"
+          ]
+        },
+        {
+          "limit": [
+            "price",
+            "size",
+            "time_in_force",
+            "cancel_after",
+            "post_only"
+          ]
+        }
+      ]
+    },
+    "product_id",
+    "stp",
+    "stop",
+    "stop_price"
+  ]
+}

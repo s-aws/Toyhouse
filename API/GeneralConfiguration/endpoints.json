@@ -1,0 +1,34 @@
+{
+  "website": [
+    "https",
+    "pro.coinbase.com"
+  ],
+  "sandbox_website": [
+    "https",
+    "public.sandbox.pro.coinbase.com"
+  ],
+  "websocket": [
+    "wss",
+    "ws-feed.pro.coinbase.com"
+  ],
+  "sandbox_websocket": [
+    "wss",
+    "ws-feed-public.sandbox.pro.coinbase.com"
+  ],
+  "rest": [
+    "https",
+    "api.pro.coinbase.com"
+  ],
+  "sandbox_rest": [
+    "https",
+    "api-public.sandbox.pro.coinbase.com"
+  ],
+  "fix": [
+    "tcp+ssl",
+    "fix.pro.coinbase.com:4198"
+  ],
+  "sandbox_fix": [
+    "tcp+ssl",
+    "fix-public.sandbox.pro.coinbase.com:4198"
+  ]
+}

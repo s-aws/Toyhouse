@@ -1,0 +1,21 @@
+{
+  "request": [
+    "POST",
+    "/deposits",
+    "payment-method"
+  ],
+  "permissions": [
+    "transfer"
+  ],
+  "parameters": [
+    {
+      "amount": "$amount"
+    },
+    {
+      "currency": "$currency"
+    },
+    {
+      "payment_method_id": "$payment_method_id"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "request": [
+    "GET",
+    "/users/self/verify"
+  ],
+  "parameters": [
+    {
+      "type": "subscribe",
+      "channels": [
+        {
+          "name": "status"
+        },
+        {
+          "name": "heartbeat"
+        },
+        {
+          "name": "ticker"
+        },
+        {
+          "name": "l2update"
+        },
+        {
+          "name": "matches"
+        },
+        {
+          "name": "full"
+        }
+      ],
+      "product_ids": [
+        "$product_ids"
+      ]
+    }
+  ]
+}

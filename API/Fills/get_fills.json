@@ -1,0 +1,18 @@
+{
+  "request": [
+    "GET",
+    "/fills"
+  ],
+  "permissions": [
+    "trade",
+    "view"
+  ],
+  "query_parameters": [
+    {
+      "product_id": "$product_id"
+    },
+    {
+      "order_id": "$order_id"
+    }
+  ]
+}

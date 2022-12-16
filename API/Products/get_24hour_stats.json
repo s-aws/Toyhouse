@@ -1,0 +1,8 @@
+{
+  "request": [
+    "GET",
+    "/products",
+    "$product_id",
+    "stats"
+  ]
+}

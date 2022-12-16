@@ -1,0 +1,29 @@
+
+{
+  "request": [
+    "GET",
+    [
+      "/accounts",
+      "$account_id",
+      "ledger"
+    ]
+  ],
+  "permissions": [
+    "view",
+    "trade"
+  ],
+  "fields": [
+    "id",
+    "created_at",
+    "amount",
+    "balance",
+    "type",
+    {
+      "details": [
+        "order_id",
+        "trade_id",
+        "product_id"
+      ]
+    }
+  ]
+}

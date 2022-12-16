@@ -1,0 +1,21 @@
+{
+  "request": [
+    "POST",
+    "/withdrawals",
+    "coinbase-account"
+  ],
+  "permissions": [
+    "transfer"
+  ],
+  "parameters": [
+    {
+      "amount": "$amount"
+    },
+    {
+      "currency": "$currency"
+    },
+    {
+      "coinbase_account_id": "$coinbase_account_id"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "request": [
+    "GET",
+    "/accounts"
+  ],
+  "permissions": [
+    "view",
+    "trade"
+  ],
+  "fields": [
+    "id",
+    "currency",
+    "balance",
+    "holds",
+    "available"
+  ]
+}

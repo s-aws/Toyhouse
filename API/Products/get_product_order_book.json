@@ -1,0 +1,13 @@
+{
+  "request": [
+    "GET",
+    "/products",
+    "$product_id",
+    "book"
+  ],
+  "query_parameters": [
+    {
+      "level": "$level"
+    }
+  ]
+}
