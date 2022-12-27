@@ -14,6 +14,7 @@ sub to_dict {
 }
 
 sub to_string {
+    $_[0]->this(default_version) unless $_[0]->this;
     $_[0]->this
 }
 
