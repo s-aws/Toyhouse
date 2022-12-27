@@ -6,8 +6,6 @@ use Class::Struct 'Toyhouse::Provider::Coinbase::Auth::Signer' => {
     secret => '$',
     payload => '$'};
 
-our $BASE64_ENCODE_EOL = '';
-
 *hmac_sha256_hex = *Toyhouse::Provider::Generic::Auth::Secure::hmac_sha256_hex;
 
 sub sign {
