@@ -8,7 +8,7 @@ use Toyhouse::Provider::Generic::Timestamp;
 *as_string = *Toyhouse::Provider::Generic::Timestamp::as_string;
 
 sub new {
-    bless {time => get_new_time()}, shift
+    bless {}, shift
 }
 
 sub as_header {

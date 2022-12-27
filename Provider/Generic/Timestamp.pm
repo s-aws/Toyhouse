@@ -7,7 +7,7 @@ sub get_new_time {
 }
 
 sub renew {
-    $_[0]->{time} = new_time();
+    $_[0]->{time} = get_new_time();
 }
 
 sub as_string {

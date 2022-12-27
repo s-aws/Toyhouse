@@ -4,9 +4,14 @@ use Class::Struct 'Toyhouse::Provider::Coinbase::Auth' => {
     credentials => 'Toyhouse::Provider::Coinbase::Auth::Credentials',
     payload => 'Toyhouse::Provider::Coinbase::Auth::Payload'};
 
+sub __refresh {
+    $_[0]->credentials->resolve;
+    $_[0]->payload->timestamp->renew;
+}
+
 sub generate_request_signature_headers {
 
-    $_[0]->credentials->resolve;
+    __refresh($_[0]);
 
     {
         "CB-ACCESS-KEY" => $_[0]->credentials->api_key,
