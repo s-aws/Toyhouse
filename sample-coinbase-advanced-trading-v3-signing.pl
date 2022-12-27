@@ -35,7 +35,7 @@ use LWP::UserAgent;
 my $ua = LWP::UserAgent->new;
 
 my $req = HTTP::Request->new(
-    $method->as_string => $api_endpoint->as_string);
+    $method->as_string => $api_endpoint->as_url);
 
 my $headers = $auth->generate_request_signature_headers;
 
