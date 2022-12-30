@@ -16,8 +16,8 @@ use Toyhouse::Provider::Coinbase::Timestamp;
 
 my $body = Toyhouse::Provider::Generic::Request::Body->new;
 my $method = Toyhouse::Provider::Generic::Request::Method->new(this => Toyhouse::Provider::Generic::Request::Method->new->get);
-my $request_path = Toyhouse::Provider::Coinbase::Request::Path->new(this => ['api','v3','brokerage','accounts']);
-my $api_endpoint = Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $request_path->as_string);
+my $request_path = Toyhouse::Provider::Coinbase::Request::Path->new(this => ['accounts']);
+my $api_endpoint = Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $request_path);
 my $timestamp = Toyhouse::Provider::Coinbase::Timestamp->new();
 
 my $credentials = Toyhouse::Provider::Coinbase::Auth::Credentials->new();
@@ -44,5 +44,7 @@ $req->header(%$headers);
 
 my $res = $ua->request($req);
 
-print $res->content;
+use JSON;
+my $json = JSON->new;
+print Dumper($json->decode($res->content));
 1;

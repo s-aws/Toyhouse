@@ -12,7 +12,7 @@ sub as_string {
 
     $_[0]->timestamp->as_string .
         $_[0]->method->as_string .
-        "/" . $_[0]->request_path->as_string .
+        "/" . $_[0]->request_path->build->as_string .
         $_[0]->body->to_string;
 }
 
