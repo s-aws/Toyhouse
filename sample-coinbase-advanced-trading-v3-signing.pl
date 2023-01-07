@@ -15,16 +15,16 @@ use Toyhouse::Provider::Coinbase::Auth::Payload;
 use Toyhouse::Provider::Coinbase::Timestamp;
 
 my $body = Toyhouse::Provider::Generic::Request::Body->new;
-my $method = Toyhouse::Provider::Generic::Request::Method->new(this => Toyhouse::Provider::Generic::Request::Method->new->get);
-my $request_path = Toyhouse::Provider::Coinbase::Request::Path->new(this => ['accounts']);
-my $api_endpoint = Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $request_path);
+my $method = Toyhouse::Provider::Generic::Request::Method->get;
+#my $request_path = Toyhouse::Provider::Coinbase::Request::Path->new(this => );
+my $api_endpoint = Toyhouse::Provider::Coinbase::API::Endpoint->new(this => [accounts => 'ListAccounts']);
 my $timestamp = Toyhouse::Provider::Coinbase::Timestamp->new();
 
 my $credentials = Toyhouse::Provider::Coinbase::Auth::Credentials->new();
 my $payload = Toyhouse::Provider::Coinbase::Auth::Payload->new(
     body => $body,
     method => $method,
-    request_path => $request_path,
+    request_path => $api_endpoint->r_path,
     timestamp => $timestamp);
 
 my $auth = Toyhouse::Provider::Coinbase::Auth->new(
@@ -35,7 +35,7 @@ use LWP::UserAgent;
 my $ua = LWP::UserAgent->new;
 
 my $req = HTTP::Request->new(
-    $method->as_string => $api_endpoint->as_url);
+    $method => $api_endpoint->as_url);
 
 my $headers = $auth->generate_request_signature_headers;
 
@@ -46,5 +46,7 @@ my $res = $ua->request($req);
 
 use JSON;
 my $json = JSON->new;
+print Dumper($res);
+print Dumper($res->content);
 print Dumper($json->decode($res->content));
 1;

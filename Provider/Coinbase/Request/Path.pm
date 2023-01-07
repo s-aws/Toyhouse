@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Toyhouse::Provider::Generic::Request::Path;
 use Class::Struct 'Toyhouse::Provider::Coinbase::Request::Path' => {
-    this => '@',
+    this => '$',
     query_params => 'Toyhouse::Provider::Generic::API::Query'};
 
 my $BASE_PATH = sub {('api', 'v3', 'brokerage')};
@@ -11,6 +11,8 @@ my $BASE_PATH = sub {('api', 'v3', 'brokerage')};
 *as_string = *Toyhouse::Provider::Generic::Request::Path::as_string;
 
 sub build {
+    # update $_[0]->this with prefix
+    # if ['api','v3', 'brokerage'] doesn't already exist
     my $current = $_[0]->this;
     my @base_path = $BASE_PATH->();
 
@@ -19,7 +21,6 @@ sub build {
             unshift(@{$current}, $element)
         }
     }
-
     $_[0];
 }
 
