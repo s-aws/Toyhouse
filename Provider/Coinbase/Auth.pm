@@ -1,4 +1,6 @@
 package Toyhouse::Provider::Coinbase::Auth;
+use warnings;
+use strict;
 use Toyhouse::Provider::Coinbase::Auth::Signer;
 use Class::Struct 'Toyhouse::Provider::Coinbase::Auth' => {
     credentials => 'Toyhouse::Provider::Coinbase::Auth::Credentials',

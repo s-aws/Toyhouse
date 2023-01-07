@@ -29,18 +29,17 @@ sub request {
     $_[0]->body(Toyhouse::Provider::Generic::Request::Body->new) unless 
         $_[0]->body and (ref($_[0]->body) !~ /SCALAR/);
 
-    $_[0]->api_endpoint(Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $_[1])) unless
-        $_[0]->api_endpoint and (ref($_[0]->api_endpoint) !~ /SCALAR/);
+    $_[0]->api_endpoint(Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $_[0]->api_endpoint)) if
+        $_[0]->api_endpoint and (ref($_[0]->api_endpoint) =~ /ARRAY/);
 
     $_[0]->request_path($_[0]->api_endpoint->r_path);
 
     $_[0]->method(Toyhouse::Provider::Generic::Request::Method->get) unless $_[0]->method;
 
-    $_[0]->timestamp(Toyhouse::Provider::Coinbase::Timestamp->new)
-        unless $_[0]->timestamp and (ref($_[0]->timestamp) !~ /SCALAR/);
+    $_[0]->timestamp(Toyhouse::Provider::Coinbase::Timestamp->new) unless $_[0]->timestamp;
 
     $_[0]->credentials(Toyhouse::Provider::Coinbase::Auth::Credentials->new) unless
-        $_[0]->credentials and (ref($_[0]->credentials) !~ /SCALAR/);
+        $_[0]->credentials and (ref($_[0]->credentials) !~ /REF/);
 
     $_[0]->payload(Toyhouse::Provider::Coinbase::Auth::Payload->new(
         body        => $_[0]->body,
@@ -49,7 +48,7 @@ sub request {
         timestamp   => $_[0]->timestamp));
 
     $_[0]->auth(Toyhouse::Provider::Coinbase::Auth->new(
-        credentials => $_[0]->credentials,
+        credentials => $_[0]->credentials->resolve,
         payload     => $_[0]->payload)) unless $_[0]->auth;
 
     my $headers = $_[0]->auth->generate_request_signature_headers;

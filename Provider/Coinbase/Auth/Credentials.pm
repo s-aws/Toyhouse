@@ -11,6 +11,7 @@ sub resolve {
         $_[0]->api_key($ENV{CB_KEY});
         $_[0]->api_secret($ENV{CB_SECRET});
     }
+    $_[0];
 }
 
 

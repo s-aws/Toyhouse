@@ -5,9 +5,14 @@ use strict;
 use JSON;
 use Data::Dumper;
 use Toyhouse::Provider::Coinbase::Client;
+use Toyhouse::Provider::Coinbase::API::Endpoint::Accounts::GetAccount;
 
 my $json = JSON->new;
-my $client = Toyhouse::Provider::Coinbase::Client->new;
-my $output = $client->request(['accounts', 'ListAccounts']);
+my $client = Toyhouse::Provider::Coinbase::Client->new(
+    api_endpoint => Toyhouse::Provider::Coinbase::API::Endpoint::Accounts::GetAccount->api_endpoint);
+
+my $output = $client->request;
+
+
 
 1;
