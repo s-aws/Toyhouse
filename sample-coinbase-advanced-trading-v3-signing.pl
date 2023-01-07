@@ -16,7 +16,6 @@ use Toyhouse::Provider::Coinbase::Timestamp;
 
 my $body = Toyhouse::Provider::Generic::Request::Body->new;
 my $method = Toyhouse::Provider::Generic::Request::Method->get;
-#my $request_path = Toyhouse::Provider::Coinbase::Request::Path->new(this => );
 my $api_endpoint = Toyhouse::Provider::Coinbase::API::Endpoint->new(this => [accounts => 'ListAccounts']);
 my $timestamp = Toyhouse::Provider::Coinbase::Timestamp->new();
 
@@ -44,9 +43,5 @@ $req->header(%$headers);
 
 my $res = $ua->request($req);
 
-use JSON;
-my $json = JSON->new;
-print Dumper($res);
-print Dumper($res->content);
-print Dumper($json->decode($res->content));
+
 1;
