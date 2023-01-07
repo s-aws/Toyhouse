@@ -32,12 +32,14 @@ sub request {
     $_[0]->body(Toyhouse::Provider::Generic::Request::Body->new) unless 
         $_[0]->body and (ref($_[0]->body) !~ /SCALAR/);
 
+    if ($_[0]->api_endpoint && (scalar(@{$_[0]->api_endpoint})) == 3) {
+        $_[0]->method(shift(@{$_[0]->api_endpoint}));
+    }
+
     $_[0]->api_endpoint(Toyhouse::Provider::Coinbase::API::Endpoint->new(this => $_[0]->api_endpoint)) if
         $_[0]->api_endpoint and (ref($_[0]->api_endpoint) =~ /ARRAY/);
 
     $_[0]->request_path($_[0]->api_endpoint->r_path);
-
-    $_[0]->method(Toyhouse::Provider::Generic::Request::Method->get) unless $_[0]->method;
 
     $_[0]->timestamp(Toyhouse::Provider::Coinbase::Timestamp->new) unless $_[0]->timestamp;
 

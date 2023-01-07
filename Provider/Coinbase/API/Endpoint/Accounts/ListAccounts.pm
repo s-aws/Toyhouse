@@ -6,7 +6,7 @@ use Readonly;
 Readonly::Scalar our $METHOD => Toyhouse::Provider::Generic::Request::Method->get;
 
 sub api_endpoint {
-    return ['accounts', 'ListAccount'];
+    return [$METHOD, 'accounts', 'ListAccount'];
 }
 
 1

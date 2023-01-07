@@ -6,7 +6,7 @@ use Readonly;
 Readonly::Scalar our $METHOD => Toyhouse::Provider::Generic::Request::Method->post;
 
 sub api_endpoint {
-        return ['orders/batch_cancel', 'CancelOrders'];
+        return [$METHOD, 'orders/batch_cancel', 'CancelOrders'];
 }
 
 1
