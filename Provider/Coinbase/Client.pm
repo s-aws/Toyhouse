@@ -3,6 +3,8 @@ use warnings;
 use strict;
 
 use LWP::UserAgent;
+use Readonly;
+use JSON;
 use Toyhouse::Provider::Generic::Request::Body;
 use Toyhouse::Provider::Generic::Request::Method;
 use Toyhouse::Provider::Coinbase::Request::Path;
@@ -22,9 +24,10 @@ use Class::Struct   'Toyhouse::Provider::Coinbase::Client' => {
     request_path=>  '$',
     timestamp   =>  '$' };
 
-my $USERAGENT = LWP::UserAgent->new;
+Readonly::Scalar my $USERAGENT => LWP::UserAgent->new;
 
 sub request {
+    my $json = JSON->new;
     # self, resource, api
     $_[0]->body(Toyhouse::Provider::Generic::Request::Body->new) unless 
         $_[0]->body and (ref($_[0]->body) !~ /SCALAR/);
@@ -56,6 +59,10 @@ sub request {
             $_[0]->method => $_[0]->api_endpoint->as_url);
 
     $req->header(%$headers);
-    return $USERAGENT->request($req);
+
+    my $output = $USERAGENT->request($req);
+
+    $output->content($json->decode($output->content)) if $output->content;
+    return $output;
 }
 1;
