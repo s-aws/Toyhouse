@@ -6,7 +6,7 @@ use Toyhouse::Provider::Coinbase::Configuration::REST;
 use Toyhouse::Provider::Coinbase::Request::Path;
 
 use Class::Struct 'Toyhouse::Provider::Coinbase::API::Endpoint' => [
-    this => '@',
+    this => '@', # [resource, API] # ['accounts', 'ListAccounts']
     query_params => 'Toyhouse::Provider::Generic::API::Query',
     request_path => 'Toyhouse::Provider::Coinbase::Request::Path'
 ];

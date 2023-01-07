@@ -9,7 +9,6 @@ use Class::Struct 'Toyhouse::Provider::Coinbase::Auth::Payload' => {
 };
 
 sub as_string {
-
     $_[0]->timestamp->as_string .
         $_[0]->method .
         "/" . $_[0]->request_path->build->as_string .
